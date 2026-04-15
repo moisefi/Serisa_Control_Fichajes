@@ -133,7 +133,7 @@ Esto facilita el mantenimiento y escalabilidad.
 
 ## 📌 Requisitos
 
--   Python 3.10+
+-   Python 3.12.7
 -   pip
 
 ------------------------------------------------------------------------
