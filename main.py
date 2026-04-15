@@ -7,12 +7,13 @@ from infraestructura.repositorio_fichajes import RepositorioFichajes
 from interfaz.ventana_principal import VentanaPrincipal
 from servicios.servicio_conexion import ServicioConexion
 from servicios.servicio_fichajes import ServicioFichajes
-
+from dotenv import load_dotenv
 
 if __name__ == "__main__":
     logger = configurar_logger()
     logger.info("Inicio de la aplicación")
 
+    load_dotenv()
     repositorio_configuracion = RepositorioConfiguracion()
     try:
         configuracion = repositorio_configuracion.cargar()

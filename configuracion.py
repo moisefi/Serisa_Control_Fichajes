@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -15,8 +16,8 @@ class ConfiguracionAplicacion:
     ip_bd: str = ""
     hostname_raspberry: str = "rpi-fichajes"
     puerto_bd: int = 5432
-    usuario_bd: str = "srojo"
-    contrasena_bd: str = "srojo"
+    usuario_bd: str = ""
+    contrasena_bd: str = ""
     nombre_bd: str = "postgres"
     intervalo_refresco_ms: int = 60000
 
@@ -24,6 +25,8 @@ class ConfiguracionAplicacion:
     def desde_dict(cls, datos: dict) -> "ConfiguracionAplicacion":
         base = asdict(cls())
         base.update(datos or {})
+        base["usuario_bd"] = os.getenv("DB_USER", base.get("usuario_bd", ""))
+        base["contrasena_bd"] = os.getenv("DB_PASSWORD", base.get("contrasena_bd", ""))
         return cls(**base)
 
     def a_dict(self) -> dict:
