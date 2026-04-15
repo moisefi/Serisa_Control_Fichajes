@@ -1,0 +1,12 @@
+# Entornos virtuales
+.venv/
+
+# Python cache
+__pycache__/
+
+# Logs
+logs/
+*.log
+
+# IDEs
+.idea/
