@@ -908,12 +908,16 @@ class VentanaPrincipal(tk.Tk):
     def editar_celda_tabla(self, evento) -> None:
         if self.tabla_registros is None:
             return
+
         item = self.tabla_registros.identify_row(evento.y)
         columna = self.tabla_registros.identify_column(evento.x)
+
         if not item or columna not in ("#3", "#4"):
             return
+
         x, y, ancho, alto = self.tabla_registros.bbox(item, columna)
         valor_actual = self.tabla_registros.set(item, columna)
+
         entrada = ttk.Entry(self.tabla_registros)
         entrada.place(x=x, y=y, width=ancho, height=alto)
         entrada.insert(0, valor_actual)
@@ -922,15 +926,29 @@ class VentanaPrincipal(tk.Tk):
         def guardar_edicion(_event=None) -> None:
             nuevo_valor = entrada.get().strip()
             entrada.destroy()
+
             if not nuevo_valor:
                 return
+
             id_registro = int(item)
+
             try:
                 if columna == "#3":
+                    try:
+                        datetime.strptime(nuevo_valor, "%Y-%m-%d %H:%M:%S")
+                    except ValueError:
+                        messagebox.showerror(
+                            "Formato inválido",
+                            "La fecha y hora debe tener el formato: YYYY-MM-DD HH:MM:SS"
+                        )
+                        return
+
                     self.servicio_fichajes.actualizar_fecha_hora_registro(id_registro, nuevo_valor)
                 else:
                     self.servicio_fichajes.actualizar_tipo_registro(id_registro, nuevo_valor)
+
                 self.actualizar_tabla_registros()
+
             except Exception as error:
                 messagebox.showerror("Error", str(error))
 
