@@ -91,7 +91,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 5. Instalar dependencias
+### 5. Crear .env
 ``` bash
 Crea un archivo .env con:
 DB_USER=Usuario_postgres
