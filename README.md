@@ -31,28 +31,63 @@ gráfica.
 
     APP_Proyecto/
     │
-    ├── main.py
-    ├── configuracion.py
-    ├── config.json
-    ├── errores.py
+    ├── main.py                  # Punto de entrada de la aplicación
+    ├── configuracion.py         # Configuración general
+    ├── config.json              # Parámetros de configuración
+    ├── errores.py               # Gestión de errores
     │
-    ├── servicios/
-    ├── infraestructura/
-    ├── interfaz/
+    ├── servicios/               # Lógica de negocio
+    │   ├── servicio_conexion.py
+    │   ├── servicio_fichajes.py
+    │   └── servicio_exportacion.py
     │
-    ├── logs/
-    ├── imagenes/
-    └── requirements.txt
+    ├── infraestructura/         # Acceso a datos y sistema
+    │   ├── escaner_red.py
+    │   ├── registro_logs.py
+    │   └── repositorio_fichajes.py
+    │
+    ├── interfaz/                # Interfaz gráfica
+    │   ├── ventana_principal.py
+    │   └── ventana_exportacion.py
+    │
+    ├── logs/                    # Archivos de logs
+    ├── imagenes/                # Recursos gráficos
+    └── requirements.txt         # Dependencias
 
 ------------------------------------------------------------------------
 
 ## ⚙️ Instalación
 
+### 1. Clonar el repositorio
+
 ``` bash
 git clone git@github.com:moisefi/Serisa_Control_Fichajes.git
 cd Serisa_Control_Fichajes
+```
+
+### 2. Crear entorno virtual
+
+``` bash
 python -m venv .venv
+```
+
+### 3. Activar entorno
+
+**Windows:**
+
+``` bash
 .venv\Scripts\activate
+```
+
+**Linux/Mac:**
+
+``` bash
+source .venv/bin/activate
+```
+
+### 4. Instalar dependencias
+
+``` bash
 pip install -r requirements.txt
 ```
 
@@ -66,6 +101,49 @@ python main.py
 
 ------------------------------------------------------------------------
 
+## ⚙️ Configuración
+
+El archivo `config.json` contiene los parámetros de configuración del
+sistema (conexiones, rutas, etc.).
+
+
+------------------------------------------------------------------------
+
+## 🧪 Logs
+
+Los logs de la aplicación se almacenan en:
+
+    /logs/
+
+Permiten analizar errores y actividad del sistema.
+
+------------------------------------------------------------------------
+
+## 🧠 Arquitectura
+
+El proyecto sigue una separación por capas:
+
+-   Interfaz → interacción con el usuario\
+-   Servicios → lógica de negocio\
+-   Infraestructura → acceso a datos y red
+
+Esto facilita el mantenimiento y escalabilidad.
+
+------------------------------------------------------------------------
+
+## 📌 Requisitos
+
+-   Python 3.10+
+-   pip
+
+------------------------------------------------------------------------
+
 ## ✍️ Autor
 
-Sergio (moisefi)
+-   Sergio (moisefi)
+
+------------------------------------------------------------------------
+
+## 📄 Licencia
+
+Uso educativo / proyecto personal
