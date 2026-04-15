@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import os
 import threading
 import tkinter as tk
@@ -832,8 +833,17 @@ class VentanaPrincipal(tk.Tk):
 
     def pedir_ip_manual(self) -> None:
         ip = simpledialog.askstring("IP manual", "Introduce la IP de la base de datos:")
-        if ip:
-            self._conectar_a_ip(ip)
+
+        if not ip:
+            return
+
+        try:
+            ipaddress.ip_address(ip)
+        except ValueError:
+            messagebox.showerror("IP inválida", "Introduce una dirección IP válida (ej: 192.168.1.10)")
+            return
+
+        self._conectar_a_ip(ip)
 
     def registrar_usuario(self) -> None:
         if not self.servicio_fichajes.repositorio.esta_conectado():
