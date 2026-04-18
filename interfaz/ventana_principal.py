@@ -15,21 +15,25 @@ from errores import ErrorConexionBaseDeDatos
 from interfaz.ventana_exportacion import VentanaExportacion
 from servicios.servicio_conexion import ServicioConexion
 from servicios.servicio_fichajes import FiltrosRegistros, ServicioFichajes
-
+from interfaz.ventana_administracion import VentanaAdministracion
 
 class VentanaPrincipal(tk.Tk):
     def __init__(
-        self,
-        configuracion: ConfiguracionAplicacion,
-        servicio_conexion: ServicioConexion,
-        servicio_fichajes: ServicioFichajes,
-        logger,
+            self,
+            configuracion: ConfiguracionAplicacion,
+            servicio_conexion: ServicioConexion,
+            servicio_fichajes: ServicioFichajes,
+            servicio_autenticacion,
+            logger,
+            sesion=None,
     ) -> None:
         super().__init__()
         self.configuracion = configuracion
         self.servicio_conexion = servicio_conexion
         self.servicio_fichajes = servicio_fichajes
         self.logger = logger
+        self.servicio_autenticacion = servicio_autenticacion
+        self.sesion = sesion
 
         self.title("SERISA · Gestión de fichajes")
         self.geometry("1360x1000")
@@ -80,6 +84,9 @@ class VentanaPrincipal(tk.Tk):
         self._configurar_icono_ventana()
         self._crear_interfaz()
         self.after(200, self._intentar_conexion_inicial)
+
+    def _es_admin(self) -> bool:
+        return bool(self.sesion and getattr(self.sesion, "rol", "").lower() == "admin")
 
     def _configurar_icono_ventana(self) -> None:
         try:
@@ -300,8 +307,26 @@ class VentanaPrincipal(tk.Tk):
         self._crear_zona_registros(panel_principal)
 
     def _crear_cabecera(self) -> None:
-        resumen = ttk.Frame(self, padding=(16, 14, 16, 12))
-        resumen.grid(row=0, column=0, sticky="ew")
+        cabecera = ttk.Frame(self, padding=(16, 14, 16, 12))
+        cabecera.grid(row=0, column=0, sticky="ew")
+        cabecera.columnconfigure(0, weight=1)
+
+        # Fila superior: botón admin a la izquierda
+        fila_superior = ttk.Frame(cabecera)
+        fila_superior.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        fila_superior.columnconfigure(0, weight=1)
+
+        if self._es_admin():
+            ttk.Button(
+                fila_superior,
+                text="Administración",
+                command=self._abrir_ventana_administracion,
+                style="Secondary.TButton",
+            ).grid(row=0, column=0, sticky="w")
+
+        # Fila inferior: tarjetas resumen
+        resumen = ttk.Frame(cabecera)
+        resumen.grid(row=1, column=0, sticky="ew")
 
         for i in range(4):
             resumen.columnconfigure(i, weight=1)
@@ -310,6 +335,26 @@ class VentanaPrincipal(tk.Tk):
         self._crear_tarjeta_resumen(resumen, 1, "Usuarios activos", self.resumen_usuarios)
         self._crear_tarjeta_resumen(resumen, 2, "Tarjetas libres", self.resumen_tarjetas)
         self._crear_tarjeta_resumen(resumen, 3, "Última sincronización", self.resumen_actualizacion)
+
+    def _abrir_ventana_administracion(self) -> None:
+        if not self._es_admin():
+            messagebox.showwarning(
+                "Acceso denegado",
+                "Solo los usuarios administradores pueden acceder a esta zona.",
+            )
+            return
+
+        try:
+            ventana = VentanaAdministracion(
+                master=self,
+                servicio_autenticacion=self.servicio_autenticacion,
+                logger=self.logger,
+                sesion=self.sesion,
+            )
+            ventana.grab_set()
+        except Exception as error:
+            self.logger.exception("No se pudo abrir la ventana de administración")
+            messagebox.showerror("Error", str(error))
 
     def _crear_tarjeta_resumen(
             self,
@@ -636,7 +681,6 @@ class VentanaPrincipal(tk.Tk):
         scrollbar_horizontal.grid(row=1, column=0, sticky="ew")
 
         self.tabla_registros.bind("<Double-1>", self.editar_celda_tabla)
-
 
     def _limpiar_estado_desconectado(self) -> None:
         self.resumen_registros.set("0")

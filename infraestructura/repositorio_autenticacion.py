@@ -46,3 +46,43 @@ class RepositorioAutenticacion:
         """
         with self.repositorio_bd.cursor() as cursor:
             cursor.execute(consulta, (password_hash, user_id))
+
+    def listar_usuarios(self) -> list[dict]:
+        consulta = """
+            SELECT id, username, rol, activo, creado_en
+            FROM auth_usuarios
+            ORDER BY username ASC
+        """
+
+        with self.repositorio_bd.cursor() as cursor:
+            cursor.execute(consulta)
+            filas = cursor.fetchall()
+
+        return [
+            {
+                "id": fila[0],
+                "username": fila[1],
+                "rol": fila[2],
+                "activo": fila[3],
+                "creado_en": fila[4],
+            }
+            for fila in filas
+        ]
+
+    def actualizar_usuario(self, user_id: int, rol: str, activo: bool) -> None:
+        consulta = """
+            UPDATE auth_usuarios
+            SET rol = %s,
+                activo = %s
+            WHERE id = %s
+        """
+        with self.repositorio_bd.cursor() as cursor:
+            cursor.execute(consulta, (rol, activo, user_id))
+
+    def eliminar_usuario_por_username(self, username: str) -> None:
+        consulta = """
+            DELETE FROM auth_usuarios
+            WHERE username = %s
+        """
+        with self.repositorio_bd.cursor() as cursor:
+            cursor.execute(consulta, (username,))

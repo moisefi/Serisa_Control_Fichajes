@@ -4,6 +4,7 @@ import bcrypt
 
 
 class ServicioAutenticacion:
+    ROLES_VALIDOS = {"admin", "rrhh", "basic"}
     def __init__(self, repositorio_autenticacion) -> None:
         self.repositorio_autenticacion = repositorio_autenticacion
 
@@ -63,3 +64,22 @@ class ServicioAutenticacion:
     def cambiar_password(self, user_id: int, nueva_password: str) -> None:
         password_hash = self.hash_password(nueva_password)
         self.repositorio_autenticacion.actualizar_password(user_id, password_hash)
+
+    def _validar_rol(self, rol: str) -> str:
+        rol_normalizado = rol.strip().lower()
+        if rol_normalizado not in self.ROLES_VALIDOS:
+            raise ValueError("Rol no válido")
+        return rol_normalizado
+
+    def listar_usuarios(self) -> list[dict]:
+        return self.repositorio_autenticacion.listar_usuarios()
+
+    def actualizar_usuario(self, user_id: int, rol: str, activo: bool) -> None:
+        rol = self._validar_rol(rol)
+        self.repositorio_autenticacion.actualizar_usuario(user_id, rol, activo)
+
+    def eliminar_usuario(self, username: str) -> None:
+        username = username.strip()
+        if not username:
+            raise ValueError("Debes indicar un nombre de usuario")
+        self.repositorio_autenticacion.eliminar_usuario_por_username(username)

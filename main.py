@@ -57,10 +57,11 @@ if __name__ == "__main__":
         logger.info("Aplicación cerrada antes de iniciar sesión")
     else:
         app = VentanaPrincipal(
-            configuracion,
-            servicio_conexion,
-            servicio_fichajes,
-            logger,
+            configuracion=configuracion,
+            servicio_conexion=servicio_conexion,
+            servicio_fichajes=servicio_fichajes,
+            servicio_autenticacion=servicio_autenticacion,
+            logger=logger,
+            sesion=sesion,
         )
-        app.sesion = sesion
         app.mainloop()
