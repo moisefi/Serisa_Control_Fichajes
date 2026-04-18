@@ -12,6 +12,7 @@ class SesionUsuario:
     id_usuario: int
     username: str
     rol: str
+    usuario_rfid: str | None = None
 
 
 class VentanaLogin(tk.Tk):
@@ -424,6 +425,7 @@ class VentanaLogin(tk.Tk):
                 id_usuario=usuario["id"],
                 username=usuario["username"],
                 rol=usuario["rol"],
+                usuario_rfid=usuario.get("usuario_rfid"),
             )
             self.destroy()
 

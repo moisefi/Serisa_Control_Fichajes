@@ -869,8 +869,21 @@ class VentanaPrincipal(tk.Tk):
 
     def _obtener_datos_pantalla(self) -> tuple[list[tuple], dict]:
         usuario_filtro = self.var_filtro_usuario.get().strip() or None
-        if self._es_basic() and self.sesion is not None:
-            usuario_filtro = getattr(self.sesion, "usuario_rfid", None) or None
+
+        if self._es_basic():
+            usuario_rfid = None
+            if self.sesion is not None:
+                usuario_rfid = (getattr(self.sesion, "usuario_rfid", None) or "").strip()
+
+            if not usuario_rfid:
+                self.logger.warning("Usuario basic sin usuario_rfid asociado")
+                return [], {
+                    "uids_sin_asignar": [],
+                    "usuarios_asignados": [],
+                    "tipos": [],
+                }
+
+            usuario_filtro = usuario_rfid
 
         filtros = FiltrosRegistros(
             usuario=usuario_filtro,
