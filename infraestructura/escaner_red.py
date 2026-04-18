@@ -34,9 +34,13 @@ class EscanerRed:
         finally:
             socket_prueba.close()
 
-    def buscar_ip_raspberry(self) -> Optional[str]:
+    def buscar_ip_raspberry(self) -> str | None:
         ip = self.resolver_ip_por_hostname()
         if not ip:
             return None
-        self.comprobar_puerto_abierto(ip)
+
+        if not self.comprobar_puerto_abierto(ip):
+            return None
+
         return ip
+

@@ -37,15 +37,31 @@ class VentanaPrincipal(tk.Tk):
         self.logger = logger
         self.sesion = sesion
 
-        self.title("SERISA · Gestión de fichajes")
-        self.geometry("1360x1000")
-        self.minsize(1240, 860)
-        self.configure(bg="#eef3f8")
-
         self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.lock_bd = threading.Lock()
+        self.resultado_cierre = "salir"
 
+        self._inicializar_estado()
+        self._configurar_ventana()
+        self._crear_estilos()
+        self._configurar_icono_ventana()
+        self._crear_interfaz()
+
+        self.protocol("WM_DELETE_WINDOW", self._gestionar_cierre_ventana)
+
+        if self._puede_ver_conexion():
+            self.after(200, self._intentar_conexion_inicial)
+        else:
+            self.after(200, self._inicializar_sin_panel_conexion)
+
+    # =========================
+    # INICIALIZACIÓN
+    # =========================
+    def _inicializar_estado(self) -> None:
         self.estado_conexion = tk.StringVar(value="Desconectado")
         self.ip_base_datos = tk.StringVar(value="Sin conexión")
+        self.estado_tabla = tk.StringVar(value="Listo")
+
         self.var_nombre_usuario = tk.StringVar()
         self.var_uid_tarjeta = tk.StringVar()
         self.var_uid_baja = tk.StringVar()
@@ -60,6 +76,7 @@ class VentanaPrincipal(tk.Tk):
 
         self.lista_usuarios: list[str] = []
         self.lista_uid: list[str] = []
+        self.mapa_baja_usuario: dict[str, str] = {}
 
         self.fecha_desde_filtro = None
         self.fecha_hasta_filtro = None
@@ -75,25 +92,19 @@ class VentanaPrincipal(tk.Tk):
         self.combo_filtro_tipo: ttk.Combobox | None = None
         self.etiqueta_resumen_fechas: ttk.Label | None = None
         self.etiqueta_estado: ttk.Label | None = None
+        self.etiqueta_estado_tabla: ttk.Label | None = None
         self.boton_buscar: ttk.Button | None = None
         self.boton_ip_manual: ttk.Button | None = None
-        self.mapa_baja_usuario: dict[str, str] = {}
 
         self.logo_principal = None
         self.icono_refrescar = None
         self.icono_ventana = None
 
-        self.resultado_cierre = "salir"
-        self.protocol("WM_DELETE_WINDOW", self._gestionar_cierre_ventana)
-
-        self._crear_estilos()
-        self._configurar_icono_ventana()
-        self._crear_interfaz()
-
-        if self._puede_ver_conexion():
-            self.after(200, self._intentar_conexion_inicial)
-        else:
-            self.after(200, self.actualizar_tabla_registros)
+    def _configurar_ventana(self) -> None:
+        self.title("SERISA · Gestión de fichajes")
+        self.geometry("1360x1000")
+        self.minsize(1240, 860)
+        self.configure(bg="#eef3f8")
 
     # =========================
     # ROLES
@@ -119,13 +130,13 @@ class VentanaPrincipal(tk.Tk):
         return self._rol_actual() in {"rrhh", "admin"}
 
     def _puede_ver_conexion(self) -> bool:
-        return self._rol_actual() == "admin"
+        return self._rol_actual() in {"rrhh", "admin"}
 
     def _puede_editar_registros(self) -> bool:
         return self._rol_actual() in {"rrhh", "admin"}
 
     # =========================
-    # VENTANA
+    # ESTILOS / VENTANA
     # =========================
     def _configurar_icono_ventana(self) -> None:
         try:
@@ -136,9 +147,6 @@ class VentanaPrincipal(tk.Tk):
         except Exception as e:
             self.logger.warning(f"No se pudo cargar el icono de la ventana: {e}")
 
-    # =========================
-    # ESTILOS
-    # =========================
     def _crear_estilos(self) -> None:
         estilo = ttk.Style(self)
         try:
@@ -202,30 +210,10 @@ class VentanaPrincipal(tk.Tk):
         estilo.configure("TLabel", background=fondo, foreground=texto, font=fuente_base)
         estilo.configure("Card.TLabel", background=superficie, foreground=texto, font=fuente_base)
 
-        estilo.configure(
-            "HeroTitle.TLabel",
-            background=fondo,
-            foreground=texto,
-            font=fuente_heading,
-        )
-        estilo.configure(
-            "HeroSub.TLabel",
-            background=fondo,
-            foreground=texto_suave,
-            font=fuente_base,
-        )
-        estilo.configure(
-            "SectionTitle.TLabel",
-            background=superficie,
-            foreground=texto,
-            font=fuente_bold,
-        )
-        estilo.configure(
-            "Muted.TLabel",
-            background=superficie,
-            foreground=texto_suave,
-            font=fuente_base,
-        )
+        estilo.configure("HeroTitle.TLabel", background=fondo, foreground=texto, font=fuente_heading)
+        estilo.configure("HeroSub.TLabel", background=fondo, foreground=texto_suave, font=fuente_base)
+        estilo.configure("SectionTitle.TLabel", background=superficie, foreground=texto, font=fuente_bold)
+        estilo.configure("Muted.TLabel", background=superficie, foreground=texto_suave, font=fuente_base)
         estilo.configure(
             "Chip.TLabel",
             background=secundario,
@@ -233,36 +221,11 @@ class VentanaPrincipal(tk.Tk):
             font=fuente_small,
             padding=(8, 4),
         )
-        estilo.configure(
-            "MetricValue.TLabel",
-            background=superficie,
-            foreground=texto,
-            font=fuente_heading,
-        )
-        estilo.configure(
-            "MetricLabel.TLabel",
-            background=superficie,
-            foreground=texto_suave,
-            font=fuente_small,
-        )
-        estilo.configure(
-            "Cabecera.TLabel",
-            background=superficie,
-            foreground=texto_suave,
-            font=fuente_bold,
-        )
-        estilo.configure(
-            "EstadoConectado.TLabel",
-            background=superficie,
-            foreground=exito,
-            font=fuente_estado,
-        )
-        estilo.configure(
-            "EstadoDesconectado.TLabel",
-            background=superficie,
-            foreground=error,
-            font=fuente_estado,
-        )
+        estilo.configure("MetricValue.TLabel", background=superficie, foreground=texto, font=fuente_heading)
+        estilo.configure("MetricLabel.TLabel", background=superficie, foreground=texto_suave, font=fuente_small)
+        estilo.configure("Cabecera.TLabel", background=superficie, foreground=texto_suave, font=fuente_bold)
+        estilo.configure("EstadoConectado.TLabel", background=superficie, foreground=exito, font=fuente_estado)
+        estilo.configure("EstadoDesconectado.TLabel", background=superficie, foreground=error, font=fuente_estado)
 
         estilo.configure(
             "Primary.TButton",
@@ -300,19 +263,8 @@ class VentanaPrincipal(tk.Tk):
         )
         estilo.map("Accent.TButton", background=[("active", "#d7e9fb")])
 
-        estilo.configure(
-            "TEntry",
-            fieldbackground=superficie,
-            bordercolor=borde,
-            lightcolor=borde,
-            padding=6,
-        )
-        estilo.configure(
-            "TCombobox",
-            fieldbackground=superficie,
-            background=superficie,
-            padding=5,
-        )
+        estilo.configure("TEntry", fieldbackground=superficie, bordercolor=borde, lightcolor=borde, padding=6)
+        estilo.configure("TCombobox", fieldbackground=superficie, background=superficie, padding=5)
 
         estilo.configure(
             "Treeview",
@@ -337,6 +289,13 @@ class VentanaPrincipal(tk.Tk):
     # =========================
     # INTERFAZ
     # =========================
+    def _inicializar_sin_panel_conexion(self) -> None:
+        try:
+            self.actualizar_tabla_registros()
+            self._programar_actualizacion_periodica()
+        except Exception:
+            self.logger.exception("Error al inicializar la aplicación sin panel de conexión")
+
     def _crear_interfaz(self) -> None:
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=0)
@@ -373,15 +332,12 @@ class VentanaPrincipal(tk.Tk):
         panel_principal.rowconfigure(0, weight=1)
 
         fila_lateral = 0
-
         if self._puede_gestionar_rfid():
             self._crear_zona_usuarios(panel_lateral, fila_lateral)
             fila_lateral += 1
-
         if self._puede_exportar():
             self._crear_zona_exportaciones(panel_lateral, fila_lateral)
             fila_lateral += 1
-
         if self._puede_ver_conexion():
             self._crear_zona_conexion(panel_lateral, fila_lateral)
 
@@ -406,7 +362,6 @@ class VentanaPrincipal(tk.Tk):
 
         resumen = ttk.Frame(cabecera)
         resumen.grid(row=1, column=0, sticky="ew")
-
         for i in range(4):
             resumen.columnconfigure(i, weight=1)
 
@@ -414,27 +369,6 @@ class VentanaPrincipal(tk.Tk):
         self._crear_tarjeta_resumen(resumen, 1, "Usuarios activos", self.resumen_usuarios)
         self._crear_tarjeta_resumen(resumen, 2, "Tarjetas libres", self.resumen_tarjetas)
         self._crear_tarjeta_resumen(resumen, 3, "Última sincronización", self.resumen_actualizacion)
-
-    def _abrir_ventana_administracion(self) -> None:
-        if not self._es_admin():
-            messagebox.showwarning(
-                "Acceso denegado",
-                "Solo los usuarios administradores pueden acceder a esta zona.",
-            )
-            return
-
-        try:
-            ventana = VentanaAdministracion(
-                master=self,
-                servicio_autenticacion=self.servicio_autenticacion,
-                servicio_fichajes=self.servicio_fichajes,
-                logger=self.logger,
-                sesion=self.sesion,
-            )
-            ventana.grab_set()
-        except Exception as error:
-            self.logger.exception("No se pudo abrir la ventana de administración")
-            messagebox.showerror("Error", str(error))
 
     def _crear_tarjeta_resumen(
         self,
@@ -444,25 +378,11 @@ class VentanaPrincipal(tk.Tk):
         variable: tk.StringVar,
     ) -> None:
         tarjeta = ttk.Frame(contenedor, style="Card.TFrame", padding=16)
-        tarjeta.grid(
-            row=0,
-            column=columna,
-            sticky="nsew",
-            padx=(0, 10) if columna < 3 else (0, 0),
-        )
+        tarjeta.grid(row=0, column=columna, sticky="nsew", padx=(0, 10) if columna < 3 else (0, 0))
         tarjeta.columnconfigure(0, weight=1)
 
-        ttk.Label(
-            tarjeta,
-            text=titulo,
-            style="MetricLabel.TLabel",
-        ).grid(row=0, column=0, sticky="w")
-
-        ttk.Label(
-            tarjeta,
-            textvariable=variable,
-            style="MetricValue.TLabel",
-        ).grid(row=1, column=0, sticky="w", pady=(8, 0))
+        ttk.Label(tarjeta, text=titulo, style="MetricLabel.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(tarjeta, textvariable=variable, style="MetricValue.TLabel").grid(row=1, column=0, sticky="w", pady=(8, 0))
 
     def _crear_zona_usuarios(self, contenedor: ttk.Frame, fila: int) -> None:
         marco = ttk.LabelFrame(contenedor, text="Gestión de usuarios", padding=16)
@@ -480,28 +400,11 @@ class VentanaPrincipal(tk.Tk):
         sub_alta.columnconfigure(0, weight=0)
         sub_alta.columnconfigure(1, weight=1)
 
-        ttk.Label(
-            sub_alta,
-            text="Nombre completo",
-            style="Card.TLabel",
-        ).grid(row=0, column=0, sticky="w", padx=(0, 10), pady=(0, 6))
+        ttk.Label(sub_alta, text="Nombre completo", style="Card.TLabel").grid(row=0, column=0, sticky="w", padx=(0, 10), pady=(0, 6))
+        ttk.Entry(sub_alta, textvariable=self.var_nombre_usuario).grid(row=0, column=1, sticky="ew", pady=(0, 6))
 
-        ttk.Entry(
-            sub_alta,
-            textvariable=self.var_nombre_usuario,
-        ).grid(row=0, column=1, sticky="ew", pady=(0, 6))
-
-        ttk.Label(
-            sub_alta,
-            text="Tarjeta RFID",
-            style="Card.TLabel",
-        ).grid(row=1, column=0, sticky="w", padx=(0, 10), pady=(0, 10))
-
-        self.combo_uid_alta = ttk.Combobox(
-            sub_alta,
-            textvariable=self.var_uid_tarjeta,
-            state="normal",
-        )
+        ttk.Label(sub_alta, text="Tarjeta RFID", style="Card.TLabel").grid(row=1, column=0, sticky="w", padx=(0, 10), pady=(0, 10))
+        self.combo_uid_alta = ttk.Combobox(sub_alta, textvariable=self.var_uid_tarjeta, state="normal")
         self.combo_uid_alta.grid(row=1, column=1, sticky="ew", pady=(0, 10))
 
         ttk.Button(
@@ -516,17 +419,8 @@ class VentanaPrincipal(tk.Tk):
         sub_baja.columnconfigure(0, weight=0)
         sub_baja.columnconfigure(1, weight=1)
 
-        ttk.Label(
-            sub_baja,
-            text="Selecciona usuario",
-            style="Card.TLabel",
-        ).grid(row=0, column=0, sticky="w", padx=(0, 10), pady=(0, 10))
-
-        self.combo_uid_baja = ttk.Combobox(
-            sub_baja,
-            textvariable=self.var_uid_baja,
-            state="readonly",
-        )
+        ttk.Label(sub_baja, text="Selecciona usuario", style="Card.TLabel").grid(row=0, column=0, sticky="w", padx=(0, 10), pady=(0, 10))
+        self.combo_uid_baja = ttk.Combobox(sub_baja, textvariable=self.var_uid_baja, state="readonly")
         self.combo_uid_baja.grid(row=0, column=1, sticky="ew", pady=(0, 10))
 
         ttk.Button(
@@ -547,28 +441,15 @@ class VentanaPrincipal(tk.Tk):
             style="Muted.TLabel",
         ).grid(row=0, column=0, sticky="w", pady=(0, 12))
 
-        ttk.Button(
-            marco,
-            text="Exportar a Excel",
-            command=self.abrir_ventana_excel,
-            style="Accent.TButton",
-        ).grid(row=1, column=0, sticky="ew", pady=(0, 10))
-
-        ttk.Button(
-            marco,
-            text="Exportar a PDF",
-            command=self.abrir_ventana_pdf,
-            style="Accent.TButton",
-        ).grid(row=2, column=0, sticky="ew")
+        ttk.Button(marco, text="Exportar a Excel", command=self.abrir_ventana_excel, style="Accent.TButton").grid(row=1, column=0, sticky="ew", pady=(0, 10))
+        ttk.Button(marco, text="Exportar a PDF", command=self.abrir_ventana_pdf, style="Accent.TButton").grid(row=2, column=0, sticky="ew")
 
     def _crear_zona_conexion(self, contenedor: ttk.Frame, fila: int) -> None:
         marco = ttk.LabelFrame(contenedor, text="Conexión", padding=16)
         marco.grid(row=fila, column=0, sticky="ew")
         marco.columnconfigure(0, weight=1)
 
-        ttk.Label(marco, text="Estado actual", style="Cabecera.TLabel").grid(
-            row=0, column=0, sticky="w"
-        )
+        ttk.Label(marco, text="Estado actual", style="Cabecera.TLabel").grid(row=0, column=0, sticky="w")
 
         self.etiqueta_estado = ttk.Label(
             marco,
@@ -611,6 +492,7 @@ class VentanaPrincipal(tk.Tk):
         marco = ttk.LabelFrame(contenedor, text="Registros recientes", padding=16)
         marco.grid(row=0, column=0, sticky="nsew")
         marco.columnconfigure(0, weight=1)
+        marco.columnconfigure(1, weight=0)
         marco.rowconfigure(0, weight=0)
         marco.rowconfigure(1, weight=0)
         marco.rowconfigure(2, weight=1)
@@ -619,52 +501,54 @@ class VentanaPrincipal(tk.Tk):
         if self._puede_editar_registros():
             texto_ayuda = "Aplica filtros combinados y edita fecha/hora o tipo con doble clic sobre la tabla."
 
-        ttk.Label(
-            marco,
-            text=texto_ayuda,
-            style="Muted.TLabel",
-        ).grid(row=0, column=0, sticky="w", pady=(0, 10))
+        ttk.Label(marco, text=texto_ayuda, style="Muted.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 10))
+        self.etiqueta_estado_tabla = ttk.Label(marco, textvariable=self.estado_tabla, style="Muted.TLabel")
+        self.etiqueta_estado_tabla.grid(row=0, column=1, sticky="e", pady=(0, 10))
 
         marco_filtros = ttk.Frame(marco)
-        marco_filtros.grid(row=1, column=0, sticky="ew")
+        marco_filtros.grid(row=1, column=0, columnspan=2, sticky="ew")
         for i in range(4):
             marco_filtros.columnconfigure(i, weight=1)
         marco_filtros.columnconfigure(4, weight=0)
         marco_filtros.columnconfigure(5, weight=0)
 
-        bloque_usuario = ttk.Frame(marco_filtros)
+        self._crear_bloque_filtro_usuario(marco_filtros)
+        self._crear_bloque_filtro_uid(marco_filtros)
+        self._crear_bloque_filtro_fecha(marco_filtros)
+        self._crear_bloque_filtro_tipo(marco_filtros)
+        self._crear_acciones_filtros(marco_filtros)
+        self._crear_tabla_registros(marco)
+
+        if self._es_basic():
+            if self.combo_filtro_usuario is not None:
+                self.combo_filtro_usuario.configure(state="disabled")
+            if self.combo_filtro_uid is not None:
+                self.combo_filtro_uid.configure(state="disabled")
+
+    def _crear_bloque_filtro_usuario(self, contenedor: ttk.Frame) -> None:
+        bloque_usuario = ttk.Frame(contenedor)
         bloque_usuario.grid(row=0, column=0, sticky="ew", padx=(0, 10), pady=(0, 10))
         ttk.Label(bloque_usuario, text="Usuario", style="Muted.TLabel").pack(anchor="w")
-        self.combo_filtro_usuario = ttk.Combobox(
-            bloque_usuario,
-            textvariable=self.var_filtro_usuario,
-            state="normal",
-        )
+        self.combo_filtro_usuario = ttk.Combobox(bloque_usuario, textvariable=self.var_filtro_usuario, state="normal")
         self.combo_filtro_usuario.pack(fill="x", pady=(4, 0))
         self.combo_filtro_usuario.bind("<KeyRelease>", self._filtrar_usuario)
 
-        bloque_uid = ttk.Frame(marco_filtros)
+    def _crear_bloque_filtro_uid(self, contenedor: ttk.Frame) -> None:
+        bloque_uid = ttk.Frame(contenedor)
         bloque_uid.grid(row=0, column=1, sticky="ew", padx=(0, 10), pady=(0, 10))
         ttk.Label(bloque_uid, text="Tarjeta", style="Muted.TLabel").pack(anchor="w")
-        self.combo_filtro_uid = ttk.Combobox(
-            bloque_uid,
-            textvariable=self.var_filtro_uid,
-            state="normal",
-        )
+        self.combo_filtro_uid = ttk.Combobox(bloque_uid, textvariable=self.var_filtro_uid, state="normal")
         self.combo_filtro_uid.pack(fill="x", pady=(4, 0))
         self.combo_filtro_uid.bind("<KeyRelease>", self._filtrar_uid)
 
-        bloque_fecha = ttk.Frame(marco_filtros)
+    def _crear_bloque_filtro_fecha(self, contenedor: ttk.Frame) -> None:
+        bloque_fecha = ttk.Frame(contenedor)
         bloque_fecha.grid(row=0, column=2, sticky="ew", padx=(0, 10), pady=(0, 10))
         ttk.Label(bloque_fecha, text="Intervalo", style="Muted.TLabel").pack(anchor="w")
         fila_fecha = ttk.Frame(bloque_fecha)
         fila_fecha.pack(fill="x", pady=(4, 0))
 
-        self.etiqueta_resumen_fechas = ttk.Label(
-            fila_fecha,
-            text="Sin intervalo",
-            style="Card.TLabel",
-        )
+        self.etiqueta_resumen_fechas = ttk.Label(fila_fecha, text="Sin intervalo", style="Card.TLabel")
         self.etiqueta_resumen_fechas.pack(side="left", fill="x", expand=True)
 
         ttk.Button(
@@ -674,17 +558,15 @@ class VentanaPrincipal(tk.Tk):
             style="Secondary.TButton",
         ).pack(side="right", padx=(8, 0))
 
-        bloque_tipo = ttk.Frame(marco_filtros)
+    def _crear_bloque_filtro_tipo(self, contenedor: ttk.Frame) -> None:
+        bloque_tipo = ttk.Frame(contenedor)
         bloque_tipo.grid(row=0, column=3, sticky="ew", padx=(0, 10), pady=(0, 10))
         ttk.Label(bloque_tipo, text="Tipo", style="Muted.TLabel").pack(anchor="w")
-        self.combo_filtro_tipo = ttk.Combobox(
-            bloque_tipo,
-            textvariable=self.var_filtro_tipo,
-            state="readonly",
-        )
+        self.combo_filtro_tipo = ttk.Combobox(bloque_tipo, textvariable=self.var_filtro_tipo, state="readonly")
         self.combo_filtro_tipo.pack(fill="x", pady=(4, 0))
 
-        acciones = ttk.Frame(marco_filtros)
+    def _crear_acciones_filtros(self, contenedor: ttk.Frame) -> None:
+        acciones = ttk.Frame(contenedor)
         acciones.grid(row=0, column=4, sticky="e", pady=(22, 10))
 
         ttk.Button(
@@ -701,36 +583,36 @@ class VentanaPrincipal(tk.Tk):
             style="Secondary.TButton",
         ).pack(side="left")
 
+        self._crear_boton_refresco(contenedor)
+
+    def _crear_boton_refresco(self, contenedor: ttk.Frame) -> None:
         ruta_icono_refrescar = os.path.join(self.base_dir, "imagenes", "refresh.png")
         try:
             imagen = Image.open(ruta_icono_refrescar)
             imagen = imagen.resize((20, 20))
             self.icono_refrescar = ImageTk.PhotoImage(imagen)
             ttk.Button(
-                marco_filtros,
+                contenedor,
                 image=self.icono_refrescar,
                 command=self.actualizar_tabla_registros,
                 style="Secondary.TButton",
             ).grid(row=0, column=5, sticky="e", pady=(22, 10))
         except Exception:
             ttk.Button(
-                marco_filtros,
+                contenedor,
                 text="Refrescar",
                 command=self.actualizar_tabla_registros,
                 style="Secondary.TButton",
             ).grid(row=0, column=5, sticky="e", pady=(22, 10))
 
-        marco_tabla = ttk.Frame(marco)
-        marco_tabla.grid(row=2, column=0, sticky="nsew", pady=(4, 0))
+    def _crear_tabla_registros(self, contenedor: ttk.LabelFrame) -> None:
+        marco_tabla = ttk.Frame(contenedor)
+        marco_tabla.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=(4, 0))
         marco_tabla.columnconfigure(0, weight=1)
         marco_tabla.rowconfigure(0, weight=1)
 
         columnas = ("usuario", "uid", "fecha_hora", "tipo")
-        self.tabla_registros = ttk.Treeview(
-            marco_tabla,
-            columns=columnas,
-            show="headings",
-        )
+        self.tabla_registros = ttk.Treeview(marco_tabla, columns=columnas, show="headings")
         self.tabla_registros.heading("usuario", text="Usuario")
         self.tabla_registros.heading("uid", text="Tarjeta")
         self.tabla_registros.heading("fecha_hora", text="Fecha / Hora")
@@ -744,16 +626,8 @@ class VentanaPrincipal(tk.Tk):
         self.tabla_registros.tag_configure("par", background="#ffffff")
         self.tabla_registros.tag_configure("impar", background="#f8fbff")
 
-        scrollbar_vertical = ttk.Scrollbar(
-            marco_tabla,
-            orient="vertical",
-            command=self.tabla_registros.yview,
-        )
-        scrollbar_horizontal = ttk.Scrollbar(
-            marco_tabla,
-            orient="horizontal",
-            command=self.tabla_registros.xview,
-        )
+        scrollbar_vertical = ttk.Scrollbar(marco_tabla, orient="vertical", command=self.tabla_registros.yview)
+        scrollbar_horizontal = ttk.Scrollbar(marco_tabla, orient="horizontal", command=self.tabla_registros.xview)
 
         self.tabla_registros.configure(
             yscrollcommand=scrollbar_vertical.set,
@@ -763,14 +637,31 @@ class VentanaPrincipal(tk.Tk):
         self.tabla_registros.grid(row=0, column=0, sticky="nsew")
         scrollbar_vertical.grid(row=0, column=1, sticky="ns")
         scrollbar_horizontal.grid(row=1, column=0, sticky="ew")
-
         self.tabla_registros.bind("<Double-1>", self.editar_celda_tabla)
 
-        if self._es_basic():
-            if self.combo_filtro_usuario is not None:
-                self.combo_filtro_usuario.configure(state="disabled")
-            if self.combo_filtro_uid is not None:
-                self.combo_filtro_uid.configure(state="disabled")
+    # =========================
+    # ADMINISTRACIÓN
+    # =========================
+    def _abrir_ventana_administracion(self) -> None:
+        if not self._es_admin():
+            messagebox.showwarning(
+                "Acceso denegado",
+                "Solo los usuarios administradores pueden acceder a esta zona.",
+            )
+            return
+
+        try:
+            ventana = VentanaAdministracion(
+                master=self,
+                servicio_autenticacion=self.servicio_autenticacion,
+                servicio_fichajes=self.servicio_fichajes,
+                logger=self.logger,
+                sesion=self.sesion,
+            )
+            ventana.grab_set()
+        except Exception as error:
+            self.logger.exception("No se pudo abrir la ventana de administración")
+            messagebox.showerror("Error", str(error))
 
     # =========================
     # DATOS / UI
@@ -780,6 +671,7 @@ class VentanaPrincipal(tk.Tk):
         self.resumen_usuarios.set("0")
         self.resumen_tarjetas.set("0")
         self.resumen_actualizacion.set("Sin sincronizar")
+        self.estado_tabla.set("Sin conexión")
 
         self.var_nombre_usuario.set("")
         self.var_uid_tarjeta.set("")
@@ -800,16 +692,9 @@ class VentanaPrincipal(tk.Tk):
             for elemento in self.tabla_registros.get_children():
                 self.tabla_registros.delete(elemento)
 
-        if self.combo_uid_alta is not None:
-            self.combo_uid_alta["values"] = ()
-        if self.combo_uid_baja is not None:
-            self.combo_uid_baja["values"] = ()
-        if self.combo_filtro_usuario is not None:
-            self.combo_filtro_usuario["values"] = ()
-        if self.combo_filtro_uid is not None:
-            self.combo_filtro_uid["values"] = ()
-        if self.combo_filtro_tipo is not None:
-            self.combo_filtro_tipo["values"] = ()
+        for combo in (self.combo_uid_alta, self.combo_uid_baja, self.combo_filtro_usuario, self.combo_filtro_uid, self.combo_filtro_tipo):
+            if combo is not None:
+                combo["values"] = ()
 
     def _aplicar_datos_desplegables(self, datos_desplegables: dict) -> None:
         uids_sin_asignar = datos_desplegables["uids_sin_asignar"]
@@ -870,6 +755,7 @@ class VentanaPrincipal(tk.Tk):
         self._aplicar_datos_desplegables(datos_desplegables)
         self.resumen_registros.set(str(len(filas)))
         self.resumen_actualizacion.set(datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+        self.estado_tabla.set("Listo")
 
     def _obtener_datos_pantalla(self) -> tuple[list[tuple], dict]:
         usuario_filtro = self.var_filtro_usuario.get().strip() or None
@@ -881,11 +767,7 @@ class VentanaPrincipal(tk.Tk):
 
             if not usuario_rfid:
                 self.logger.warning("Usuario basic sin usuario_rfid asociado")
-                return [], {
-                    "uids_sin_asignar": [],
-                    "usuarios_asignados": [],
-                    "tipos": [],
-                }
+                return [], {"uids_sin_asignar": [], "usuarios_asignados": [], "tipos": []}
 
             usuario_filtro = usuario_rfid
 
@@ -897,23 +779,34 @@ class VentanaPrincipal(tk.Tk):
             tipo=self.var_filtro_tipo.get().strip() or None,
             limite=200,
         )
-        filas = self.servicio_fichajes.obtener_registros(filtros)
-        datos = self.servicio_fichajes.obtener_datos_desplegables()
+        with self.lock_bd:
+            filas = self.servicio_fichajes.obtener_registros(filtros)
+            datos = self.servicio_fichajes.obtener_datos_desplegables()
         return filas, datos
 
+    def _set_estado_tabla(self, texto: str) -> None:
+        self.estado_tabla.set(texto)
+        try:
+            self.update_idletasks()
+        except Exception:
+            pass
+
+    # =========================
+    # REFRESCO / CONEXIÓN
+    # =========================
     def _refrescar_datos_en_segundo_plano(self) -> None:
         try:
-            if self._puede_ver_conexion():
+            with self.lock_bd:
                 if not self.servicio_conexion.verificar_conexion_activa():
                     raise ErrorConexionBaseDeDatos("Conexión perdida con la base de datos")
+
             filas, datos = self._obtener_datos_pantalla()
             self.after(0, lambda: self._actualizar_interfaz_con_datos(filas, datos))
         except ErrorConexionBaseDeDatos:
             self.after(0, self._manejar_desconexion)
         except Exception:
             self.logger.exception("Error al refrescar datos en segundo plano")
-            if self._puede_ver_conexion():
-                self.after(0, self._manejar_desconexion)
+            self.after(0, self._manejar_desconexion)
         finally:
             self.after(0, self._reprogramar_actualizacion_periodica)
 
@@ -931,9 +824,6 @@ class VentanaPrincipal(tk.Tk):
             else:
                 self.marco_acciones_conexion.grid()
 
-    # =========================
-    # CONEXIÓN
-    # =========================
     def _intentar_conexion_inicial(self) -> None:
         if not self._puede_ver_conexion():
             return
@@ -1011,7 +901,7 @@ class VentanaPrincipal(tk.Tk):
         self._conectar_a_ip(ip)
 
     # =========================
-    # ACCIONES RFID
+    # RFID
     # =========================
     def registrar_usuario(self) -> None:
         if not self._puede_gestionar_rfid():
@@ -1019,8 +909,23 @@ class VentanaPrincipal(tk.Tk):
         if not self.servicio_fichajes.repositorio.esta_conectado():
             messagebox.showwarning("Sin conexión", "No hay conexión con la base de datos")
             return
+
+        nombre = self.var_nombre_usuario.get().strip()
+        uid = self.var_uid_tarjeta.get().strip()
+
+        if not nombre or not uid:
+            messagebox.showwarning("Campos obligatorios", "Debes indicar nombre y tarjeta RFID")
+            return
+
+        if not messagebox.askyesno(
+            "Confirmar alta",
+            f"¿Seguro que quieres registrar a '{nombre}' con la tarjeta '{uid}'?",
+        ):
+            return
+
         try:
-            self.servicio_fichajes.registrar_usuario(self.var_nombre_usuario.get(), self.var_uid_tarjeta.get())
+            with self.lock_bd:
+                self.servicio_fichajes.registrar_usuario(nombre, uid)
             messagebox.showinfo("Correcto", "Usuario registrado correctamente")
             self.cargar_desplegables()
             self.var_nombre_usuario.set("")
@@ -1047,7 +952,8 @@ class VentanaPrincipal(tk.Tk):
             return
 
         try:
-            self.servicio_fichajes.dar_baja_usuario(uid)
+            with self.lock_bd:
+                self.servicio_fichajes.dar_baja_usuario(uid)
             messagebox.showinfo("Correcto", "Usuario dado de baja correctamente")
             self.cargar_desplegables()
             self.var_uid_baja.set("")
@@ -1058,7 +964,7 @@ class VentanaPrincipal(tk.Tk):
             messagebox.showerror("Error", str(error))
 
     # =========================
-    # FILTROS / TABLA
+    # TABLA / FILTROS
     # =========================
     def limpiar_filtros(self) -> None:
         self.var_filtro_usuario.set("")
@@ -1074,16 +980,18 @@ class VentanaPrincipal(tk.Tk):
         self._cerrar_editor_tabla_activo()
         if self.tabla_registros is None:
             return
-
-        if self._puede_ver_conexion() and not self.servicio_fichajes.repositorio.esta_conectado():
+        if not self.servicio_fichajes.repositorio.esta_conectado():
             return
 
+        self._set_estado_tabla("Cargando registros...")
         try:
             filas, datos = self._obtener_datos_pantalla()
             self._actualizar_interfaz_con_datos(filas, datos)
         except ErrorConexionBaseDeDatos:
+            self._set_estado_tabla("Sin conexión")
             self._manejar_desconexion()
         except Exception:
+            self._set_estado_tabla("Error al cargar")
             self.logger.exception("Error al actualizar la tabla de registros")
 
     def _programar_actualizacion_periodica(self) -> None:
@@ -1098,18 +1006,13 @@ class VentanaPrincipal(tk.Tk):
         self.id_after_refresco = self.after(self.configuracion.intervalo_refresco_ms, self._programar_actualizacion_periodica)
 
     def editar_celda_tabla(self, evento) -> None:
-        if not self._puede_editar_registros():
+        if not self._puede_editar_registros() or self.tabla_registros is None:
             return
 
-        if self.tabla_registros is None:
-            return
-
-        # Cerrar cualquier editor previo que haya quedado abierto
         self._cerrar_editor_tabla_activo()
 
         item = self.tabla_registros.identify_row(evento.y)
         columna = self.tabla_registros.identify_column(evento.x)
-
         if not item or columna not in ("#3", "#4"):
             return
 
@@ -1121,87 +1024,99 @@ class VentanaPrincipal(tk.Tk):
         valor_actual = self.tabla_registros.set(item, columna)
         id_registro = int(item)
 
-        # ===== Fecha / Hora =====
         if columna == "#3":
-            editor = ttk.Entry(self.tabla_registros)
-            self.editor_tabla_activo = editor
-            editor.place(x=x, y=y, width=ancho, height=alto)
-            editor.insert(0, valor_actual)
-            editor.select_range(0, "end")
-            editor.focus_set()
-
-            def guardar_fecha(_event=None) -> None:
-                if self.editor_tabla_activo is not editor:
-                    return
-
-                nuevo_valor = editor.get().strip()
-                self._cerrar_editor_tabla_activo()
-
-                if not nuevo_valor:
-                    return
-
-                try:
-                    datetime.strptime(nuevo_valor, "%Y-%m-%d %H:%M:%S")
-                except ValueError:
-                    messagebox.showerror(
-                        "Formato inválido",
-                        "La fecha y hora debe tener el formato: YYYY-MM-DD HH:MM:SS"
-                    )
-                    return
-
-                try:
-                    self.servicio_fichajes.actualizar_fecha_hora_registro(id_registro, nuevo_valor)
-                    self.actualizar_tabla_registros()
-                except Exception as error:
-                    messagebox.showerror("Error", str(error))
-
-            def cancelar_fecha(_event=None) -> None:
-                self._cerrar_editor_tabla_activo()
-
-            editor.bind("<Return>", guardar_fecha)
-            editor.bind("<Escape>", cancelar_fecha)
-            editor.bind("<FocusOut>", guardar_fecha)
+            self._abrir_editor_fecha(x, y, ancho, alto, valor_actual, id_registro)
             return
 
-        # ===== Tipo =====
         if columna == "#4":
-            opciones_tipo = ("entrada", "salida")
-            valor_inicial = valor_actual if valor_actual in opciones_tipo else "entrada"
+            self._abrir_editor_tipo(x, y, ancho, alto, valor_actual, id_registro)
 
-            var_tipo = tk.StringVar(value=valor_inicial)
-            editor = ttk.Combobox(
-                self.tabla_registros,
-                textvariable=var_tipo,
-                values=opciones_tipo,
-                state="readonly",
-            )
-            self.editor_tabla_activo = editor
-            editor.place(x=x, y=y, width=ancho, height=alto)
-            editor.focus_set()
+    def _abrir_editor_fecha(self, x: int, y: int, ancho: int, alto: int, valor_actual: str, id_registro: int) -> None:
+        editor = ttk.Entry(self.tabla_registros)
+        self.editor_tabla_activo = editor
+        editor.place(x=x, y=y, width=ancho, height=alto)
+        editor.insert(0, valor_actual)
+        editor.select_range(0, "end")
+        editor.focus_set()
 
-            def guardar_tipo(_event=None) -> None:
-                if self.editor_tabla_activo is not editor:
-                    return
+        def guardar_fecha(_event=None) -> None:
+            if self.editor_tabla_activo is not editor:
+                return
 
-                nuevo_valor = var_tipo.get().strip()
-                self._cerrar_editor_tabla_activo()
+            nuevo_valor = editor.get().strip()
+            self._cerrar_editor_tabla_activo()
+            if not nuevo_valor:
+                return
 
-                if nuevo_valor not in opciones_tipo:
-                    return
+            try:
+                datetime.strptime(nuevo_valor, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                messagebox.showerror(
+                    "Formato inválido",
+                    "La fecha y hora debe tener el formato: YYYY-MM-DD HH:MM:SS",
+                )
+                return
 
-                try:
+            if nuevo_valor == valor_actual:
+                return
+
+            if not messagebox.askyesno(
+                "Confirmar cambio",
+                f"¿Guardar el cambio de fecha/hora?\n\nAnterior: {valor_actual}\nNuevo: {nuevo_valor}",
+            ):
+                return
+
+            try:
+                with self.lock_bd:
+                    self.servicio_fichajes.actualizar_fecha_hora_registro(id_registro, nuevo_valor)
+                self.actualizar_tabla_registros()
+            except Exception as error:
+                messagebox.showerror("Error", str(error))
+
+        editor.bind("<Return>", guardar_fecha)
+        editor.bind("<Escape>", lambda _event=None: self._cerrar_editor_tabla_activo())
+        editor.bind("<FocusOut>", guardar_fecha)
+
+    def _abrir_editor_tipo(self, x: int, y: int, ancho: int, alto: int, valor_actual: str, id_registro: int) -> None:
+        opciones_tipo = ("entrada", "salida")
+        valor_inicial = valor_actual if valor_actual in opciones_tipo else "entrada"
+
+        var_tipo = tk.StringVar(value=valor_inicial)
+        editor = ttk.Combobox(
+            self.tabla_registros,
+            textvariable=var_tipo,
+            values=opciones_tipo,
+            state="readonly",
+        )
+        self.editor_tabla_activo = editor
+        editor.place(x=x, y=y, width=ancho, height=alto)
+        editor.focus_set()
+
+        def guardar_tipo(_event=None) -> None:
+            if self.editor_tabla_activo is not editor:
+                return
+
+            nuevo_valor = var_tipo.get().strip()
+            self._cerrar_editor_tabla_activo()
+            if nuevo_valor not in opciones_tipo or nuevo_valor == valor_actual:
+                return
+
+            if not messagebox.askyesno(
+                "Confirmar cambio",
+                f"¿Guardar el cambio de tipo?\n\nAnterior: {valor_actual}\nNuevo: {nuevo_valor}",
+            ):
+                return
+
+            try:
+                with self.lock_bd:
                     self.servicio_fichajes.actualizar_tipo_registro(id_registro, nuevo_valor)
-                    self.actualizar_tabla_registros()
-                except Exception as error:
-                    messagebox.showerror("Error", str(error))
+                self.actualizar_tabla_registros()
+            except Exception as error:
+                messagebox.showerror("Error", str(error))
 
-            def cancelar_tipo(_event=None) -> None:
-                self._cerrar_editor_tabla_activo()
-
-            # En combobox readonly es mejor guardar solo al seleccionar o al pulsar Enter
-            editor.bind("<<ComboboxSelected>>", guardar_tipo)
-            editor.bind("<Return>", guardar_tipo)
-            editor.bind("<Escape>", cancelar_tipo)
+        editor.bind("<<ComboboxSelected>>", guardar_tipo)
+        editor.bind("<Return>", guardar_tipo)
+        editor.bind("<Escape>", lambda _event=None: self._cerrar_editor_tabla_activo())
 
     def _cerrar_editor_tabla_activo(self) -> None:
         if self.editor_tabla_activo is not None:
@@ -1232,10 +1147,11 @@ class VentanaPrincipal(tk.Tk):
         VentanaExportacion(self, self.servicio_fichajes, modo="pdf")
 
     def cargar_desplegables(self) -> None:
-        if self._puede_ver_conexion() and not self.servicio_fichajes.repositorio.esta_conectado():
+        if not self.servicio_fichajes.repositorio.esta_conectado():
             return
         try:
-            datos = self.servicio_fichajes.obtener_datos_desplegables()
+            with self.lock_bd:
+                datos = self.servicio_fichajes.obtener_datos_desplegables()
             self._aplicar_datos_desplegables(datos)
         except ErrorConexionBaseDeDatos:
             self._manejar_desconexion()
@@ -1323,7 +1239,7 @@ class VentanaPrincipal(tk.Tk):
             self.var_filtro_uid.set(filtrados[0])
 
     # =========================
-    # DESCONEXIÓN
+    # DESCONEXIÓN / CIERRE
     # =========================
     def _manejar_desconexion(self) -> None:
         self.servicio_conexion.desconectar()
@@ -1334,14 +1250,10 @@ class VentanaPrincipal(tk.Tk):
 
     def _gestionar_cierre_ventana(self) -> None:
         respuesta = self._mostrar_dialogo_cierre()
-
         if respuesta == "cancelar":
             return
 
-        if respuesta == "cerrar_sesion":
-            self.resultado_cierre = "cerrar_sesion"
-        else:
-            self.resultado_cierre = "salir"
+        self.resultado_cierre = "cerrar_sesion" if respuesta == "cerrar_sesion" else "salir"
 
         try:
             if self.id_after_refresco is not None:
@@ -1376,12 +1288,7 @@ class VentanaPrincipal(tk.Tk):
         frame = ttk.Frame(dialogo, padding=20)
         frame.pack(fill="both", expand=True)
 
-        ttk.Label(
-            frame,
-            text="¿Qué quieres hacer?",
-            style="HeroTitle.TLabel",
-        ).pack(anchor="w", pady=(0, 8))
-
+        ttk.Label(frame, text="¿Qué quieres hacer?", style="HeroTitle.TLabel").pack(anchor="w", pady=(0, 8))
         ttk.Label(
             frame,
             text="Puedes cerrar sesión para volver al login o salir completamente del programa.",
@@ -1397,26 +1304,9 @@ class VentanaPrincipal(tk.Tk):
             resultado["valor"] = valor
             dialogo.destroy()
 
-        ttk.Button(
-            botones,
-            text="Cancelar",
-            command=lambda: elegir("cancelar"),
-            style="Secondary.TButton",
-        ).pack(side="right")
-
-        ttk.Button(
-            botones,
-            text="Salir",
-            command=lambda: elegir("salir"),
-            style="Secondary.TButton",
-        ).pack(side="right", padx=(0, 8))
-
-        ttk.Button(
-            botones,
-            text="Cerrar sesión",
-            command=lambda: elegir("cerrar_sesion"),
-            style="Primary.TButton",
-        ).pack(side="right", padx=(0, 8))
+        ttk.Button(botones, text="Cancelar", command=lambda: elegir("cancelar"), style="Secondary.TButton").pack(side="right")
+        ttk.Button(botones, text="Salir", command=lambda: elegir("salir"), style="Secondary.TButton").pack(side="right", padx=(0, 8))
+        ttk.Button(botones, text="Cerrar sesión", command=lambda: elegir("cerrar_sesion"), style="Primary.TButton").pack(side="right", padx=(0, 8))
 
         dialogo.update_idletasks()
         ancho = dialogo.winfo_width()
