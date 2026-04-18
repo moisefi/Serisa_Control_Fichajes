@@ -64,6 +64,7 @@ class VentanaPrincipal(tk.Tk):
         self.fecha_desde_filtro = None
         self.fecha_hasta_filtro = None
         self.id_after_refresco = None
+        self.editor_tabla_activo = None
 
         self.marco_acciones_conexion: ttk.Frame | None = None
         self.tabla_registros: ttk.Treeview | None = None
@@ -81,6 +82,9 @@ class VentanaPrincipal(tk.Tk):
         self.logo_principal = None
         self.icono_refrescar = None
         self.icono_ventana = None
+
+        self.resultado_cierre = "salir"
+        self.protocol("WM_DELETE_WINDOW", self._gestionar_cierre_ventana)
 
         self._crear_estilos()
         self._configurar_icono_ventana()
@@ -1067,6 +1071,7 @@ class VentanaPrincipal(tk.Tk):
         self.actualizar_tabla_registros()
 
     def actualizar_tabla_registros(self) -> None:
+        self._cerrar_editor_tabla_activo()
         if self.tabla_registros is None:
             return
 
@@ -1099,52 +1104,113 @@ class VentanaPrincipal(tk.Tk):
         if self.tabla_registros is None:
             return
 
+        # Cerrar cualquier editor previo que haya quedado abierto
+        self._cerrar_editor_tabla_activo()
+
         item = self.tabla_registros.identify_row(evento.y)
         columna = self.tabla_registros.identify_column(evento.x)
 
         if not item or columna not in ("#3", "#4"):
             return
 
-        x, y, ancho, alto = self.tabla_registros.bbox(item, columna)
+        bbox = self.tabla_registros.bbox(item, columna)
+        if not bbox:
+            return
+
+        x, y, ancho, alto = bbox
         valor_actual = self.tabla_registros.set(item, columna)
+        id_registro = int(item)
 
-        entrada = ttk.Entry(self.tabla_registros)
-        entrada.place(x=x, y=y, width=ancho, height=alto)
-        entrada.insert(0, valor_actual)
-        entrada.focus()
+        # ===== Fecha / Hora =====
+        if columna == "#3":
+            editor = ttk.Entry(self.tabla_registros)
+            self.editor_tabla_activo = editor
+            editor.place(x=x, y=y, width=ancho, height=alto)
+            editor.insert(0, valor_actual)
+            editor.select_range(0, "end")
+            editor.focus_set()
 
-        def guardar_edicion(_event=None) -> None:
-            nuevo_valor = entrada.get().strip()
-            entrada.destroy()
+            def guardar_fecha(_event=None) -> None:
+                if self.editor_tabla_activo is not editor:
+                    return
 
-            if not nuevo_valor:
-                return
+                nuevo_valor = editor.get().strip()
+                self._cerrar_editor_tabla_activo()
 
-            id_registro = int(item)
+                if not nuevo_valor:
+                    return
 
-            try:
-                if columna == "#3":
-                    try:
-                        datetime.strptime(nuevo_valor, "%Y-%m-%d %H:%M:%S")
-                    except ValueError:
-                        messagebox.showerror(
-                            "Formato inválido",
-                            "La fecha y hora debe tener el formato: YYYY-MM-DD HH:MM:SS"
-                        )
-                        return
+                try:
+                    datetime.strptime(nuevo_valor, "%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    messagebox.showerror(
+                        "Formato inválido",
+                        "La fecha y hora debe tener el formato: YYYY-MM-DD HH:MM:SS"
+                    )
+                    return
 
+                try:
                     self.servicio_fichajes.actualizar_fecha_hora_registro(id_registro, nuevo_valor)
-                else:
+                    self.actualizar_tabla_registros()
+                except Exception as error:
+                    messagebox.showerror("Error", str(error))
+
+            def cancelar_fecha(_event=None) -> None:
+                self._cerrar_editor_tabla_activo()
+
+            editor.bind("<Return>", guardar_fecha)
+            editor.bind("<Escape>", cancelar_fecha)
+            editor.bind("<FocusOut>", guardar_fecha)
+            return
+
+        # ===== Tipo =====
+        if columna == "#4":
+            opciones_tipo = ("entrada", "salida")
+            valor_inicial = valor_actual if valor_actual in opciones_tipo else "entrada"
+
+            var_tipo = tk.StringVar(value=valor_inicial)
+            editor = ttk.Combobox(
+                self.tabla_registros,
+                textvariable=var_tipo,
+                values=opciones_tipo,
+                state="readonly",
+            )
+            self.editor_tabla_activo = editor
+            editor.place(x=x, y=y, width=ancho, height=alto)
+            editor.focus_set()
+
+            def guardar_tipo(_event=None) -> None:
+                if self.editor_tabla_activo is not editor:
+                    return
+
+                nuevo_valor = var_tipo.get().strip()
+                self._cerrar_editor_tabla_activo()
+
+                if nuevo_valor not in opciones_tipo:
+                    return
+
+                try:
                     self.servicio_fichajes.actualizar_tipo_registro(id_registro, nuevo_valor)
+                    self.actualizar_tabla_registros()
+                except Exception as error:
+                    messagebox.showerror("Error", str(error))
 
-                self.actualizar_tabla_registros()
+            def cancelar_tipo(_event=None) -> None:
+                self._cerrar_editor_tabla_activo()
 
-            except Exception as error:
-                messagebox.showerror("Error", str(error))
+            # En combobox readonly es mejor guardar solo al seleccionar o al pulsar Enter
+            editor.bind("<<ComboboxSelected>>", guardar_tipo)
+            editor.bind("<Return>", guardar_tipo)
+            editor.bind("<Escape>", cancelar_tipo)
 
-        entrada.bind("<Return>", guardar_edicion)
-        entrada.bind("<FocusOut>", guardar_edicion)
-        entrada.bind("<Escape>", lambda _event=None: entrada.destroy())
+    def _cerrar_editor_tabla_activo(self) -> None:
+        if self.editor_tabla_activo is not None:
+            try:
+                self.editor_tabla_activo.destroy()
+            except Exception:
+                pass
+            finally:
+                self.editor_tabla_activo = None
 
     # =========================
     # EXPORTACIONES
@@ -1265,3 +1331,99 @@ class VentanaPrincipal(tk.Tk):
         self.ip_base_datos.set("Sin conexión con la Raspberry / base de datos")
         self._limpiar_estado_desconectado()
         self._actualizar_estado_visual()
+
+    def _gestionar_cierre_ventana(self) -> None:
+        respuesta = self._mostrar_dialogo_cierre()
+
+        if respuesta == "cancelar":
+            return
+
+        if respuesta == "cerrar_sesion":
+            self.resultado_cierre = "cerrar_sesion"
+        else:
+            self.resultado_cierre = "salir"
+
+        try:
+            if self.id_after_refresco is not None:
+                self.after_cancel(self.id_after_refresco)
+        except Exception:
+            pass
+
+        try:
+            if self.servicio_conexion.verificar_conexion_activa():
+                self.servicio_conexion.desconectar()
+        except Exception:
+            self.logger.warning("No se pudo cerrar la conexión al salir de la ventana principal")
+
+        self.destroy()
+
+    def _mostrar_dialogo_cierre(self) -> str:
+        dialogo = tk.Toplevel(self)
+        dialogo.title("Salir")
+        dialogo.resizable(False, False)
+        dialogo.transient(self)
+        dialogo.grab_set()
+        dialogo.configure(bg=self.colores["fondo"])
+
+        try:
+            if self.icono_ventana is not None:
+                dialogo.iconphoto(True, self.icono_ventana)
+        except Exception:
+            pass
+
+        resultado = {"valor": "cancelar"}
+
+        frame = ttk.Frame(dialogo, padding=20)
+        frame.pack(fill="both", expand=True)
+
+        ttk.Label(
+            frame,
+            text="¿Qué quieres hacer?",
+            style="HeroTitle.TLabel",
+        ).pack(anchor="w", pady=(0, 8))
+
+        ttk.Label(
+            frame,
+            text="Puedes cerrar sesión para volver al login o salir completamente del programa.",
+            style="HeroSub.TLabel",
+            wraplength=360,
+            justify="left",
+        ).pack(anchor="w", pady=(0, 18))
+
+        botones = ttk.Frame(frame)
+        botones.pack(fill="x")
+
+        def elegir(valor: str) -> None:
+            resultado["valor"] = valor
+            dialogo.destroy()
+
+        ttk.Button(
+            botones,
+            text="Cancelar",
+            command=lambda: elegir("cancelar"),
+            style="Secondary.TButton",
+        ).pack(side="right")
+
+        ttk.Button(
+            botones,
+            text="Salir",
+            command=lambda: elegir("salir"),
+            style="Secondary.TButton",
+        ).pack(side="right", padx=(0, 8))
+
+        ttk.Button(
+            botones,
+            text="Cerrar sesión",
+            command=lambda: elegir("cerrar_sesion"),
+            style="Primary.TButton",
+        ).pack(side="right", padx=(0, 8))
+
+        dialogo.update_idletasks()
+        ancho = dialogo.winfo_width()
+        alto = dialogo.winfo_height()
+        x = self.winfo_rootx() + (self.winfo_width() // 2) - (ancho // 2)
+        y = self.winfo_rooty() + (self.winfo_height() // 2) - (alto // 2)
+        dialogo.geometry(f"{ancho}x{alto}+{x}+{y}")
+
+        dialogo.wait_window()
+        return resultado["valor"]

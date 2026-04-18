@@ -46,16 +46,20 @@ if __name__ == "__main__":
     repositorio_autenticacion = RepositorioAutenticacion(repositorio_fichajes)
     servicio_autenticacion = ServicioAutenticacion(repositorio_autenticacion)
 
-    login = VentanaLogin(
-        servicio_autenticacion=servicio_autenticacion,
-        servicio_conexion=servicio_conexion,
-        logger=logger,
-    )
-    sesion = login.mostrar()
+    salir_programa = False
 
-    if sesion is None:
-        logger.info("Aplicación cerrada antes de iniciar sesión")
-    else:
+    while not salir_programa:
+        login = VentanaLogin(
+            servicio_autenticacion=servicio_autenticacion,
+            servicio_conexion=servicio_conexion,
+            logger=logger,
+        )
+        sesion = login.mostrar()
+
+        if sesion is None:
+            logger.info("Aplicación cerrada antes de iniciar sesión")
+            break
+
         app = VentanaPrincipal(
             configuracion=configuracion,
             servicio_conexion=servicio_conexion,
@@ -65,3 +69,10 @@ if __name__ == "__main__":
             sesion=sesion,
         )
         app.mainloop()
+
+        if getattr(app, "resultado_cierre", "salir") == "cerrar_sesion":
+            logger.info("Sesión cerrada. Volviendo al login.")
+            continue
+
+        logger.info("Aplicación finalizada por el usuario")
+        salir_programa = True
