@@ -26,33 +26,54 @@ class VentanaExportacion(tk.Toplevel):
         self.var_uid = tk.StringVar()
         self.var_fecha_desde = tk.StringVar()
         self.var_fecha_hasta = tk.StringVar()
+
         self.combo_usuarios: ttk.Combobox | None = None
+        self.combo_uids: ttk.Combobox | None = None
+
+        self.lista_usuarios: list[str] = [""]
+        self.lista_uids: list[str] = [""]
+
         self.fecha_desde_activa = False
         self.fecha_hasta_activa = False
 
         self._crear_interfaz()
-        self._cargar_usuarios()
+        self._cargar_desplegables()
 
     def _crear_interfaz(self) -> None:
         marco = ttk.Frame(self, padding=18)
         marco.pack(fill="both", expand=True)
         marco.columnconfigure(0, weight=1)
 
-        ttk.Label(marco, text=f"Exportación a {self.modo.upper()}", font=("Segoe UI Semibold", 15, "bold")).grid(
-            row=0, column=0, sticky="w"
-        )
+        ttk.Label(
+            marco,
+            text=f"Exportación a {self.modo.upper()}",
+            font=("TkHeadingFont", 15, "bold"),
+        ).grid(row=0, column=0, sticky="w")
+
         ttk.Label(
             marco,
             text="Selecciona filtros opcionales para generar un informe.",
         ).grid(row=1, column=0, sticky="w", pady=(4, 14))
 
         ttk.Label(marco, text="Usuario").grid(row=2, column=0, sticky="w", pady=(0, 5))
-        self.combo_usuarios = ttk.Combobox(marco, textvariable=self.var_usuario, state="normal", width=40)
+        self.combo_usuarios = ttk.Combobox(
+            marco,
+            textvariable=self.var_usuario,
+            state="normal",
+            width=40,
+        )
         self.combo_usuarios.grid(row=3, column=0, sticky="ew", pady=(0, 10))
         self.combo_usuarios.bind("<KeyRelease>", self._filtrar_usuario)
 
         ttk.Label(marco, text="Tarjeta").grid(row=4, column=0, sticky="w", pady=(0, 5))
-        ttk.Entry(marco, textvariable=self.var_uid).grid(row=5, column=0, sticky="ew", pady=(0, 10))
+        self.combo_uids = ttk.Combobox(
+            marco,
+            textvariable=self.var_uid,
+            state="normal",
+            width=40,
+        )
+        self.combo_uids.grid(row=5, column=0, sticky="ew", pady=(0, 10))
+        self.combo_uids.bind("<KeyRelease>", self._filtrar_uid)
 
         ttk.Label(marco, text="Fecha desde").grid(row=6, column=0, sticky="w", pady=(0, 5))
         frame_fecha_desde = ttk.Frame(marco)
@@ -64,9 +85,12 @@ class VentanaExportacion(tk.Toplevel):
         self.calendario_desde.delete(0, tk.END)
         self.calendario_desde.bind("<<DateEntrySelected>>", lambda e: self._activar_fecha("desde"))
         self.calendario_desde.bind("<KeyRelease>", lambda e: self._detectar_borrado_fecha("desde"))
-        ttk.Button(frame_fecha_desde, text="✕", width=3, command=lambda: self._limpiar_fecha(self.calendario_desde)).grid(
-            row=0, column=1, padx=(6, 0)
-        )
+        ttk.Button(
+            frame_fecha_desde,
+            text="✕",
+            width=3,
+            command=lambda: self._limpiar_fecha(self.calendario_desde),
+        ).grid(row=0, column=1, padx=(6, 0))
 
         ttk.Label(marco, text="Fecha hasta").grid(row=8, column=0, sticky="w", pady=(0, 5))
         frame_fecha_hasta = ttk.Frame(marco)
@@ -78,26 +102,41 @@ class VentanaExportacion(tk.Toplevel):
         self.calendario_hasta.delete(0, tk.END)
         self.calendario_hasta.bind("<<DateEntrySelected>>", lambda e: self._activar_fecha("hasta"))
         self.calendario_hasta.bind("<KeyRelease>", lambda e: self._detectar_borrado_fecha("hasta"))
-        ttk.Button(frame_fecha_hasta, text="✕", width=3, command=lambda: self._limpiar_fecha(self.calendario_hasta)).grid(
-            row=0, column=1, padx=(6, 0)
-        )
+        ttk.Button(
+            frame_fecha_hasta,
+            text="✕",
+            width=3,
+            command=lambda: self._limpiar_fecha(self.calendario_hasta),
+        ).grid(row=0, column=1, padx=(6, 0))
 
         acciones = ttk.Frame(marco)
         acciones.grid(row=10, column=0, sticky="ew")
         acciones.columnconfigure(0, weight=1)
+
         ttk.Button(acciones, text="Cancelar", command=self.destroy).grid(row=0, column=0, sticky="w")
         ttk.Button(acciones, text="Generar archivo", command=self._generar_archivo).grid(row=0, column=1, sticky="e")
 
-    def _cargar_usuarios(self) -> None:
+    def _cargar_desplegables(self) -> None:
         try:
             usuarios = self.servicio_fichajes.repositorio.obtener_usuarios()
-            nombres = [""] + [usuario[1] for usuario in usuarios]
-            self.lista_usuarios = nombres
+
+            nombres = sorted({usuario[1] for usuario in usuarios if len(usuario) > 1 and usuario[1]})
+            uids = sorted({usuario[2] for usuario in usuarios if len(usuario) > 2 and usuario[2]})
+
+            self.lista_usuarios = [""] + nombres
+            self.lista_uids = [""] + uids
+
             assert self.combo_usuarios is not None
-            self.combo_usuarios["values"] = nombres
+            assert self.combo_uids is not None
+
+            self.combo_usuarios["values"] = self.lista_usuarios
+            self.combo_uids["values"] = self.lista_uids
+
             self.combo_usuarios.current(0)
+            self.combo_uids.current(0)
+
         except Exception as error:
-            messagebox.showerror("Error", f"No se pudieron cargar los usuarios:\n{error}", parent=self)
+            messagebox.showerror("Error", f"No se pudieron cargar los desplegables:\n{error}", parent=self)
 
     def _obtener_filtros(self) -> tuple[str | None, str | None, str | None, str | None]:
         usuario = self.var_usuario.get().strip() or None
@@ -158,37 +197,45 @@ class VentanaExportacion(tk.Toplevel):
             )
             if not ruta:
                 return
+
             filtros_texto = self._texto_filtros(usuario, uid, fecha_desde, fecha_hasta)
             ExportadorPDF.exportar(ruta, filas, filtros_texto)
             messagebox.showinfo("Correcto", "PDF generado correctamente", parent=self)
             self.destroy()
+
         except Exception as error:
             messagebox.showerror("Error", str(error), parent=self)
 
     def _filtrar_usuario(self, _event=None) -> None:
         texto = self.var_usuario.get().strip().lower()
-        if not texto:
-            filtrados = self.lista_usuarios
-        else:
-            filtrados = [u for u in self.lista_usuarios if texto in u.lower()]
-        self.combo_usuarios["values"] = filtrados
+        filtrados = self.lista_usuarios if not texto else [u for u in self.lista_usuarios if texto in u.lower()]
+        if self.combo_usuarios is not None:
+            self.combo_usuarios["values"] = filtrados
         if len(filtrados) == 1:
             self.var_usuario.set(filtrados[0])
 
-    def _limpiar_fecha(self, calendario):
+    def _filtrar_uid(self, _event=None) -> None:
+        texto = self.var_uid.get().strip().lower()
+        filtrados = self.lista_uids if not texto else [u for u in self.lista_uids if texto in u.lower()]
+        if self.combo_uids is not None:
+            self.combo_uids["values"] = filtrados
+        if len(filtrados) == 1:
+            self.var_uid.set(filtrados[0])
+
+    def _limpiar_fecha(self, calendario) -> None:
         calendario.delete(0, tk.END)
         if calendario == self.calendario_desde:
             self.fecha_desde_activa = False
         else:
             self.fecha_hasta_activa = False
 
-    def _activar_fecha(self, tipo):
+    def _activar_fecha(self, tipo) -> None:
         if tipo == "desde":
             self.fecha_desde_activa = True
         else:
             self.fecha_hasta_activa = True
 
-    def _detectar_borrado_fecha(self, tipo):
+    def _detectar_borrado_fecha(self, tipo) -> None:
         if tipo == "desde":
             texto = self.calendario_desde.get().strip()
             self.fecha_desde_activa = bool(texto)
