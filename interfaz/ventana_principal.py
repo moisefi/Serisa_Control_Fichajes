@@ -5,6 +5,7 @@ import os
 import threading
 import tkinter as tk
 from datetime import datetime
+from tkinter import font as tkfont
 from tkinter import messagebox, simpledialog, ttk
 
 from PIL import Image, ImageTk
@@ -12,27 +13,28 @@ from tkcalendar import DateEntry
 
 from configuracion import ConfiguracionAplicacion
 from errores import ErrorConexionBaseDeDatos
+from interfaz.ventana_administracion import VentanaAdministracion
 from interfaz.ventana_exportacion import VentanaExportacion
 from servicios.servicio_conexion import ServicioConexion
 from servicios.servicio_fichajes import FiltrosRegistros, ServicioFichajes
-from interfaz.ventana_administracion import VentanaAdministracion
+
 
 class VentanaPrincipal(tk.Tk):
     def __init__(
-            self,
-            configuracion: ConfiguracionAplicacion,
-            servicio_conexion: ServicioConexion,
-            servicio_fichajes: ServicioFichajes,
-            servicio_autenticacion,
-            logger,
-            sesion=None,
+        self,
+        configuracion: ConfiguracionAplicacion,
+        servicio_conexion: ServicioConexion,
+        servicio_fichajes: ServicioFichajes,
+        servicio_autenticacion,
+        logger,
+        sesion=None,
     ) -> None:
         super().__init__()
         self.configuracion = configuracion
         self.servicio_conexion = servicio_conexion
         self.servicio_fichajes = servicio_fichajes
-        self.logger = logger
         self.servicio_autenticacion = servicio_autenticacion
+        self.logger = logger
         self.sesion = sesion
 
         self.title("SERISA · Gestión de fichajes")
@@ -83,11 +85,44 @@ class VentanaPrincipal(tk.Tk):
         self._crear_estilos()
         self._configurar_icono_ventana()
         self._crear_interfaz()
-        self.after(200, self._intentar_conexion_inicial)
+
+        if self._puede_ver_conexion():
+            self.after(200, self._intentar_conexion_inicial)
+        else:
+            self.after(200, self.actualizar_tabla_registros)
+
+    # =========================
+    # ROLES
+    # =========================
+    def _rol_actual(self) -> str:
+        if not self.sesion:
+            return ""
+        return getattr(self.sesion, "rol", "").strip().lower()
 
     def _es_admin(self) -> bool:
-        return bool(self.sesion and getattr(self.sesion, "rol", "").lower() == "admin")
+        return self._rol_actual() == "admin"
 
+    def _es_rrhh(self) -> bool:
+        return self._rol_actual() == "rrhh"
+
+    def _es_basic(self) -> bool:
+        return self._rol_actual() == "basic"
+
+    def _puede_gestionar_rfid(self) -> bool:
+        return self._rol_actual() in {"rrhh", "admin"}
+
+    def _puede_exportar(self) -> bool:
+        return self._rol_actual() in {"rrhh", "admin"}
+
+    def _puede_ver_conexion(self) -> bool:
+        return self._rol_actual() == "admin"
+
+    def _puede_editar_registros(self) -> bool:
+        return self._rol_actual() in {"rrhh", "admin"}
+
+    # =========================
+    # VENTANA
+    # =========================
     def _configurar_icono_ventana(self) -> None:
         try:
             ruta_logo = os.path.join(self.base_dir, "imagenes", "logo_serisa.png")
@@ -97,6 +132,9 @@ class VentanaPrincipal(tk.Tk):
         except Exception as e:
             self.logger.warning(f"No se pudo cargar el icono de la ventana: {e}")
 
+    # =========================
+    # ESTILOS
+    # =========================
     def _crear_estilos(self) -> None:
         estilo = ttk.Style(self)
         try:
@@ -129,8 +167,23 @@ class VentanaPrincipal(tk.Tk):
             "error": error,
         }
 
-        self.option_add("*Font", ("Segoe UI", 10))
-        self.option_add("*TCombobox*Listbox.font", ("Segoe UI", 10))
+        fuente_base = tkfont.nametofont("TkDefaultFont").copy()
+        fuente_base.configure(size=10)
+
+        fuente_small = tkfont.nametofont("TkDefaultFont").copy()
+        fuente_small.configure(size=9)
+
+        fuente_heading = tkfont.nametofont("TkHeadingFont").copy()
+        fuente_heading.configure(size=16, weight="bold")
+
+        fuente_bold = tkfont.nametofont("TkDefaultFont").copy()
+        fuente_bold.configure(size=10, weight="bold")
+
+        fuente_estado = tkfont.nametofont("TkDefaultFont").copy()
+        fuente_estado.configure(size=11, weight="bold")
+
+        self.option_add("*Font", fuente_base)
+        self.option_add("*TCombobox*Listbox.font", fuente_base)
 
         estilo.configure("TFrame", background=fondo)
         estilo.configure("Card.TFrame", background=superficie, relief="flat")
@@ -139,77 +192,77 @@ class VentanaPrincipal(tk.Tk):
             "TLabelframe.Label",
             background=superficie,
             foreground=texto,
-            font=("Segoe UI", 11, "bold"),
+            font=fuente_bold,
         )
 
-        estilo.configure("TLabel", background=fondo, foreground=texto)
-        estilo.configure("Card.TLabel", background=superficie, foreground=texto)
+        estilo.configure("TLabel", background=fondo, foreground=texto, font=fuente_base)
+        estilo.configure("Card.TLabel", background=superficie, foreground=texto, font=fuente_base)
 
         estilo.configure(
             "HeroTitle.TLabel",
             background=fondo,
             foreground=texto,
-            font=("Segoe UI", 16, "bold"),
+            font=fuente_heading,
         )
         estilo.configure(
             "HeroSub.TLabel",
             background=fondo,
             foreground=texto_suave,
-            font=("Segoe UI", 10),
+            font=fuente_base,
         )
         estilo.configure(
             "SectionTitle.TLabel",
             background=superficie,
             foreground=texto,
-            font=("Segoe UI", 12, "bold"),
+            font=fuente_bold,
         )
         estilo.configure(
             "Muted.TLabel",
             background=superficie,
             foreground=texto_suave,
-            font=("Segoe UI", 10),
+            font=fuente_base,
         )
         estilo.configure(
             "Chip.TLabel",
             background=secundario,
             foreground=primario,
-            font=("Segoe UI", 9, "bold"),
+            font=fuente_small,
             padding=(8, 4),
         )
         estilo.configure(
             "MetricValue.TLabel",
             background=superficie,
             foreground=texto,
-            font=("Segoe UI", 16, "bold"),
+            font=fuente_heading,
         )
         estilo.configure(
             "MetricLabel.TLabel",
             background=superficie,
             foreground=texto_suave,
-            font=("Segoe UI", 9),
+            font=fuente_small,
         )
         estilo.configure(
             "Cabecera.TLabel",
             background=superficie,
             foreground=texto_suave,
-            font=("Segoe UI", 10, "bold"),
+            font=fuente_bold,
         )
         estilo.configure(
             "EstadoConectado.TLabel",
             background=superficie,
             foreground=exito,
-            font=("Segoe UI", 11, "bold"),
+            font=fuente_estado,
         )
         estilo.configure(
             "EstadoDesconectado.TLabel",
             background=superficie,
             foreground=error,
-            font=("Segoe UI", 11, "bold"),
+            font=fuente_estado,
         )
 
         estilo.configure(
             "Primary.TButton",
-            font=("Segoe UI", 10, "bold"),
+            font=fuente_bold,
             padding=(14, 10),
             background=primario,
             foreground="white",
@@ -224,7 +277,7 @@ class VentanaPrincipal(tk.Tk):
 
         estilo.configure(
             "Secondary.TButton",
-            font=("Segoe UI", 10),
+            font=fuente_base,
             padding=(12, 9),
             background=superficie,
             foreground=texto,
@@ -235,7 +288,7 @@ class VentanaPrincipal(tk.Tk):
 
         estilo.configure(
             "Accent.TButton",
-            font=("Segoe UI", 10, "bold"),
+            font=fuente_bold,
             padding=(12, 12),
             background=secundario,
             foreground=primario,
@@ -265,26 +318,43 @@ class VentanaPrincipal(tk.Tk):
             rowheight=34,
             bordercolor=borde,
             borderwidth=1,
+            font=fuente_base,
         )
         estilo.configure(
             "Treeview.Heading",
             background=secundario,
             foreground=texto,
-            font=("Segoe UI", 10, "bold"),
+            font=fuente_bold,
             relief="flat",
             padding=(8, 8),
         )
         estilo.map("Treeview.Heading", background=[("active", "#dceaf8")])
 
+    # =========================
+    # INTERFAZ
+    # =========================
     def _crear_interfaz(self) -> None:
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(0, weight=0)  # resumen
-        self.rowconfigure(1, weight=1)  # contenido principal
+        self.rowconfigure(0, weight=0)
+        self.rowconfigure(1, weight=1)
 
         self._crear_cabecera()
 
         cuerpo = ttk.Frame(self, padding=(16, 0, 16, 16))
         cuerpo.grid(row=1, column=0, sticky="nsew")
+
+        if self._es_basic():
+            cuerpo.columnconfigure(0, weight=1)
+            cuerpo.rowconfigure(0, weight=1)
+
+            panel_principal = ttk.Frame(cuerpo)
+            panel_principal.grid(row=0, column=0, sticky="nsew")
+            panel_principal.columnconfigure(0, weight=1)
+            panel_principal.rowconfigure(0, weight=1)
+
+            self._crear_zona_registros(panel_principal)
+            return
+
         cuerpo.columnconfigure(0, weight=0, minsize=440)
         cuerpo.columnconfigure(1, weight=1)
         cuerpo.rowconfigure(0, weight=1)
@@ -292,18 +362,25 @@ class VentanaPrincipal(tk.Tk):
         panel_lateral = ttk.Frame(cuerpo)
         panel_lateral.grid(row=0, column=0, sticky="nsew", padx=(0, 16))
         panel_lateral.columnconfigure(0, weight=1)
-        panel_lateral.rowconfigure(0, weight=0)
-        panel_lateral.rowconfigure(1, weight=0)
-        panel_lateral.rowconfigure(2, weight=0)
 
         panel_principal = ttk.Frame(cuerpo)
         panel_principal.grid(row=0, column=1, sticky="nsew")
         panel_principal.columnconfigure(0, weight=1)
         panel_principal.rowconfigure(0, weight=1)
 
-        self._crear_zona_usuarios(panel_lateral)
-        self._crear_zona_exportaciones(panel_lateral)
-        self._crear_zona_conexion(panel_lateral)
+        fila_lateral = 0
+
+        if self._puede_gestionar_rfid():
+            self._crear_zona_usuarios(panel_lateral, fila_lateral)
+            fila_lateral += 1
+
+        if self._puede_exportar():
+            self._crear_zona_exportaciones(panel_lateral, fila_lateral)
+            fila_lateral += 1
+
+        if self._puede_ver_conexion():
+            self._crear_zona_conexion(panel_lateral, fila_lateral)
+
         self._crear_zona_registros(panel_principal)
 
     def _crear_cabecera(self) -> None:
@@ -311,7 +388,6 @@ class VentanaPrincipal(tk.Tk):
         cabecera.grid(row=0, column=0, sticky="ew")
         cabecera.columnconfigure(0, weight=1)
 
-        # Fila superior: botón admin a la izquierda
         fila_superior = ttk.Frame(cabecera)
         fila_superior.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         fila_superior.columnconfigure(0, weight=1)
@@ -324,7 +400,6 @@ class VentanaPrincipal(tk.Tk):
                 style="Secondary.TButton",
             ).grid(row=0, column=0, sticky="w")
 
-        # Fila inferior: tarjetas resumen
         resumen = ttk.Frame(cabecera)
         resumen.grid(row=1, column=0, sticky="ew")
 
@@ -348,6 +423,7 @@ class VentanaPrincipal(tk.Tk):
             ventana = VentanaAdministracion(
                 master=self,
                 servicio_autenticacion=self.servicio_autenticacion,
+                servicio_fichajes=self.servicio_fichajes,
                 logger=self.logger,
                 sesion=self.sesion,
             )
@@ -357,11 +433,11 @@ class VentanaPrincipal(tk.Tk):
             messagebox.showerror("Error", str(error))
 
     def _crear_tarjeta_resumen(
-            self,
-            contenedor: ttk.Frame,
-            columna: int,
-            titulo: str,
-            variable: tk.StringVar,
+        self,
+        contenedor: ttk.Frame,
+        columna: int,
+        titulo: str,
+        variable: tk.StringVar,
     ) -> None:
         tarjeta = ttk.Frame(contenedor, style="Card.TFrame", padding=16)
         tarjeta.grid(
@@ -384,9 +460,9 @@ class VentanaPrincipal(tk.Tk):
             style="MetricValue.TLabel",
         ).grid(row=1, column=0, sticky="w", pady=(8, 0))
 
-    def _crear_zona_usuarios(self, contenedor: ttk.Frame) -> None:
+    def _crear_zona_usuarios(self, contenedor: ttk.Frame, fila: int) -> None:
         marco = ttk.LabelFrame(contenedor, text="Gestión de usuarios", padding=16)
-        marco.grid(row=0, column=0, sticky="ew", pady=(0, 12))
+        marco.grid(row=fila, column=0, sticky="ew", pady=(0, 12))
         marco.columnconfigure(0, weight=1)
 
         ttk.Label(
@@ -456,9 +532,9 @@ class VentanaPrincipal(tk.Tk):
             style="Secondary.TButton",
         ).grid(row=1, column=0, columnspan=2, sticky="ew")
 
-    def _crear_zona_exportaciones(self, contenedor: ttk.Frame) -> None:
+    def _crear_zona_exportaciones(self, contenedor: ttk.Frame, fila: int) -> None:
         marco = ttk.LabelFrame(contenedor, text="Exportaciones", padding=16)
-        marco.grid(row=1, column=0, sticky="ew", pady=(0, 12))
+        marco.grid(row=fila, column=0, sticky="ew", pady=(0, 12))
         marco.columnconfigure(0, weight=1)
 
         ttk.Label(
@@ -481,9 +557,9 @@ class VentanaPrincipal(tk.Tk):
             style="Accent.TButton",
         ).grid(row=2, column=0, sticky="ew")
 
-    def _crear_zona_conexion(self, contenedor: ttk.Frame) -> None:
+    def _crear_zona_conexion(self, contenedor: ttk.Frame, fila: int) -> None:
         marco = ttk.LabelFrame(contenedor, text="Conexión", padding=16)
-        marco.grid(row=2, column=0, sticky="ew")
+        marco.grid(row=fila, column=0, sticky="ew")
         marco.columnconfigure(0, weight=1)
 
         ttk.Label(marco, text="Estado actual", style="Cabecera.TLabel").grid(
@@ -535,9 +611,13 @@ class VentanaPrincipal(tk.Tk):
         marco.rowconfigure(1, weight=0)
         marco.rowconfigure(2, weight=1)
 
+        texto_ayuda = "Consulta los registros recientes del sistema."
+        if self._puede_editar_registros():
+            texto_ayuda = "Aplica filtros combinados y edita fecha/hora o tipo con doble clic sobre la tabla."
+
         ttk.Label(
             marco,
-            text="Aplica filtros combinados y edita fecha/hora o tipo con doble clic sobre la tabla.",
+            text=texto_ayuda,
             style="Muted.TLabel",
         ).grid(row=0, column=0, sticky="w", pady=(0, 10))
 
@@ -682,6 +762,15 @@ class VentanaPrincipal(tk.Tk):
 
         self.tabla_registros.bind("<Double-1>", self.editar_celda_tabla)
 
+        if self._es_basic():
+            if self.combo_filtro_usuario is not None:
+                self.combo_filtro_usuario.configure(state="disabled")
+            if self.combo_filtro_uid is not None:
+                self.combo_filtro_uid.configure(state="disabled")
+
+    # =========================
+    # DATOS / UI
+    # =========================
     def _limpiar_estado_desconectado(self) -> None:
         self.resumen_registros.set("0")
         self.resumen_usuarios.set("0")
@@ -779,8 +868,12 @@ class VentanaPrincipal(tk.Tk):
         self.resumen_actualizacion.set(datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
 
     def _obtener_datos_pantalla(self) -> tuple[list[tuple], dict]:
+        usuario_filtro = self.var_filtro_usuario.get().strip() or None
+        if self._es_basic() and self.sesion is not None:
+            usuario_filtro = getattr(self.sesion, "usuario_rfid", None) or None
+
         filtros = FiltrosRegistros(
-            usuario=self.var_filtro_usuario.get().strip() or None,
+            usuario=usuario_filtro,
             uid_tarjeta=self.var_filtro_uid.get().strip() or None,
             fecha_desde=self.fecha_desde_filtro,
             fecha_hasta=self.fecha_hasta_filtro,
@@ -793,15 +886,17 @@ class VentanaPrincipal(tk.Tk):
 
     def _refrescar_datos_en_segundo_plano(self) -> None:
         try:
-            if not self.servicio_conexion.verificar_conexion_activa():
-                raise ErrorConexionBaseDeDatos("Conexión perdida con la base de datos")
+            if self._puede_ver_conexion():
+                if not self.servicio_conexion.verificar_conexion_activa():
+                    raise ErrorConexionBaseDeDatos("Conexión perdida con la base de datos")
             filas, datos = self._obtener_datos_pantalla()
             self.after(0, lambda: self._actualizar_interfaz_con_datos(filas, datos))
         except ErrorConexionBaseDeDatos:
             self.after(0, self._manejar_desconexion)
         except Exception:
             self.logger.exception("Error al refrescar datos en segundo plano")
-            self.after(0, self._manejar_desconexion)
+            if self._puede_ver_conexion():
+                self.after(0, self._manejar_desconexion)
         finally:
             self.after(0, self._reprogramar_actualizacion_periodica)
 
@@ -819,13 +914,20 @@ class VentanaPrincipal(tk.Tk):
             else:
                 self.marco_acciones_conexion.grid()
 
+    # =========================
+    # CONEXIÓN
+    # =========================
     def _intentar_conexion_inicial(self) -> None:
+        if not self._puede_ver_conexion():
+            return
         self.estado_conexion.set("Conectando...")
         self.ip_base_datos.set("Buscando servidor...")
         self._actualizar_estado_visual()
         self.buscar_y_conectar_en_hilo()
 
     def buscar_y_conectar_en_hilo(self) -> None:
+        if not self._puede_ver_conexion():
+            return
         self.estado_conexion.set("Buscando...")
         self.ip_base_datos.set("Resolviendo hostname...")
         self._actualizar_estado_visual()
@@ -876,8 +978,10 @@ class VentanaPrincipal(tk.Tk):
             )
 
     def pedir_ip_manual(self) -> None:
-        ip = simpledialog.askstring("IP manual", "Introduce la IP de la base de datos:")
+        if not self._puede_ver_conexion():
+            return
 
+        ip = simpledialog.askstring("IP manual", "Introduce la IP de la base de datos:")
         if not ip:
             return
 
@@ -889,7 +993,12 @@ class VentanaPrincipal(tk.Tk):
 
         self._conectar_a_ip(ip)
 
+    # =========================
+    # ACCIONES RFID
+    # =========================
     def registrar_usuario(self) -> None:
+        if not self._puede_gestionar_rfid():
+            return
         if not self.servicio_fichajes.repositorio.esta_conectado():
             messagebox.showwarning("Sin conexión", "No hay conexión con la base de datos")
             return
@@ -905,16 +1014,21 @@ class VentanaPrincipal(tk.Tk):
             messagebox.showerror("Error", str(error))
 
     def dar_baja_usuario(self) -> None:
+        if not self._puede_gestionar_rfid():
+            return
         if not self.servicio_fichajes.repositorio.esta_conectado():
             messagebox.showwarning("Sin conexión", "No hay conexión con la base de datos")
             return
+
         seleccion = self.var_uid_baja.get().strip()
         uid = self.mapa_baja_usuario.get(seleccion, "")
         if not uid:
             messagebox.showwarning("Campo obligatorio", "Debes indicar el UID del usuario a dar de baja")
             return
+
         if not messagebox.askyesno("Confirmar baja", f"¿Seguro que quieres dar de baja el UID {uid}?"):
             return
+
         try:
             self.servicio_fichajes.dar_baja_usuario(uid)
             messagebox.showinfo("Correcto", "Usuario dado de baja correctamente")
@@ -926,6 +1040,9 @@ class VentanaPrincipal(tk.Tk):
         except Exception as error:
             messagebox.showerror("Error", str(error))
 
+    # =========================
+    # FILTROS / TABLA
+    # =========================
     def limpiar_filtros(self) -> None:
         self.var_filtro_usuario.set("")
         self.var_filtro_uid.set("")
@@ -937,7 +1054,10 @@ class VentanaPrincipal(tk.Tk):
         self.actualizar_tabla_registros()
 
     def actualizar_tabla_registros(self) -> None:
-        if not self.servicio_fichajes.repositorio.esta_conectado() or self.tabla_registros is None:
+        if self.tabla_registros is None:
+            return
+
+        if self._puede_ver_conexion() and not self.servicio_fichajes.repositorio.esta_conectado():
             return
 
         try:
@@ -960,6 +1080,9 @@ class VentanaPrincipal(tk.Tk):
         self.id_after_refresco = self.after(self.configuracion.intervalo_refresco_ms, self._programar_actualizacion_periodica)
 
     def editar_celda_tabla(self, evento) -> None:
+        if not self._puede_editar_registros():
+            return
+
         if self.tabla_registros is None:
             return
 
@@ -1010,20 +1133,27 @@ class VentanaPrincipal(tk.Tk):
         entrada.bind("<FocusOut>", guardar_edicion)
         entrada.bind("<Escape>", lambda _event=None: entrada.destroy())
 
+    # =========================
+    # EXPORTACIONES
+    # =========================
     def abrir_ventana_excel(self) -> None:
+        if not self._puede_exportar():
+            return
         if not self.servicio_fichajes.repositorio.esta_conectado():
             messagebox.showwarning("Sin conexión", "No hay conexión con la base de datos")
             return
         VentanaExportacion(self, self.servicio_fichajes, modo="excel")
 
     def abrir_ventana_pdf(self) -> None:
+        if not self._puede_exportar():
+            return
         if not self.servicio_fichajes.repositorio.esta_conectado():
             messagebox.showwarning("Sin conexión", "No hay conexión con la base de datos")
             return
         VentanaExportacion(self, self.servicio_fichajes, modo="pdf")
 
     def cargar_desplegables(self) -> None:
-        if not self.servicio_fichajes.repositorio.esta_conectado():
+        if self._puede_ver_conexion() and not self.servicio_fichajes.repositorio.esta_conectado():
             return
         try:
             datos = self.servicio_fichajes.obtener_datos_desplegables()
@@ -1033,6 +1163,9 @@ class VentanaPrincipal(tk.Tk):
         except Exception:
             self.logger.exception("Error al cargar desplegables")
 
+    # =========================
+    # FECHAS
+    # =========================
     def abrir_selector_intervalo_fechas(self) -> None:
         ventana = tk.Toplevel(self)
         ventana.title("Seleccionar intervalo de fechas")
@@ -1089,6 +1222,9 @@ class VentanaPrincipal(tk.Tk):
         ttk.Button(acciones, text="Cancelar", command=ventana.destroy, style="Secondary.TButton").pack(side="left")
         ttk.Button(acciones, text="Guardar intervalo", command=aceptar, style="Primary.TButton").pack(side="right")
 
+    # =========================
+    # AUTOCOMPLETADO
+    # =========================
     def _filtrar_usuario(self, _event=None) -> None:
         texto = self.var_filtro_usuario.get().strip().lower()
         if not self.combo_filtro_usuario:
@@ -1107,6 +1243,9 @@ class VentanaPrincipal(tk.Tk):
         if len(filtrados) == 1:
             self.var_filtro_uid.set(filtrados[0])
 
+    # =========================
+    # DESCONEXIÓN
+    # =========================
     def _manejar_desconexion(self) -> None:
         self.servicio_conexion.desconectar()
         self.estado_conexion.set("Desconectado")
