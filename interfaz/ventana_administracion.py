@@ -524,6 +524,15 @@ class VentanaAdministracion(tk.Toplevel):
             messagebox.showwarning("Selección", "Selecciona un usuario de la tabla.")
             return
 
+        usuario_rfid = self.var_usuario_rfid_sel.get().strip()
+
+        if self._usuario_rfid_ya_asignado(usuario_rfid, self.usuario_seleccionado_id):
+            messagebox.showwarning(
+                "RFID en uso",
+                f"El usuario RFID '{usuario_rfid}' ya está asignado a otro usuario.",
+            )
+            return
+
         try:
             self.servicio_autenticacion.actualizar_usuario(
                 user_id=self.usuario_seleccionado_id,
@@ -546,6 +555,13 @@ class VentanaAdministracion(tk.Toplevel):
 
         if not username or not rol or not password:
             messagebox.showwarning("Campos obligatorios", "Debes completar nombre, rol y contraseña.")
+            return
+
+        if self._usuario_rfid_ya_asignado(usuario_rfid):
+            messagebox.showwarning(
+                "RFID en uso",
+                f"El usuario RFID '{usuario_rfid}' ya está asignado a otro usuario.",
+            )
             return
 
         try:
@@ -593,3 +609,15 @@ class VentanaAdministracion(tk.Toplevel):
         except Exception as e:
             self.logger.exception("Error eliminando usuario")
             messagebox.showerror("Error", str(e))
+
+    def _usuario_rfid_ya_asignado(self, usuario_rfid: str, user_id_actual: int | None = None) -> bool:
+        if not usuario_rfid:
+            return False
+
+        for usuario in self.usuarios_cache:
+            if usuario["usuario_rfid"] == usuario_rfid:
+                # Permitir si es el mismo usuario que estamos editando
+                if user_id_actual is not None and usuario["id"] == user_id_actual:
+                    continue
+                return True
+        return False
