@@ -570,6 +570,7 @@ class VentanaPrincipal(tk.Tk):
         fila_intervalo = ttk.Frame(marco_intervalo)
         fila_intervalo.grid(row=1, column=0, sticky="ew", pady=(4, 0))
         fila_intervalo.columnconfigure(0, weight=1)
+        fila_intervalo.columnconfigure(1, minsize=10)
 
         self.etiqueta_resumen_fechas = ttk.Label(
             fila_intervalo,
@@ -579,6 +580,8 @@ class VentanaPrincipal(tk.Tk):
         self.etiqueta_resumen_fechas.grid(row=0, column=0, sticky="w")
 
         self._crear_boton_calendario(fila_intervalo)
+        ttk.Separator(fila_intervalo, orient="vertical").grid(row=0, column=3, sticky="ns", padx=(14, 14))
+        self._crear_boton_refresco_intervalo(fila_intervalo)
 
     def _crear_boton_calendario(self, contenedor: ttk.Frame) -> None:
         ruta_icono_calendario = os.path.join(self.base_dir, "imagenes", "calendario.png")
@@ -593,7 +596,7 @@ class VentanaPrincipal(tk.Tk):
                 image=self.icono_calendario,
                 command=self.abrir_selector_intervalo_fechas,
                 style="IconOnly.TButton",
-            ).grid(row=0, column=1, sticky="e", padx=(8, 0))
+            ).grid(row=0, column=2, sticky="e", padx=(0, 0))
 
         except Exception:
             ttk.Button(
@@ -601,7 +604,7 @@ class VentanaPrincipal(tk.Tk):
                 text="Fecha",
                 command=self.abrir_selector_intervalo_fechas,
                 style="Secondary.TButton",
-            ).grid(row=0, column=1, sticky="e", padx=(8, 0))
+            ).grid(row=0, column=2, sticky="e", padx=(0, 0))
 
 
     def _crear_bloque_filtro_fecha(self, contenedor: ttk.Frame) -> None:
@@ -662,9 +665,7 @@ class VentanaPrincipal(tk.Tk):
             style="Secondary.TButton",
         ).pack(side="left")
 
-        self._crear_boton_refresco(contenedor)
-
-    def _crear_boton_refresco(self, contenedor: ttk.Frame) -> None:
+    def _crear_boton_refresco_intervalo(self, contenedor: ttk.Frame) -> None:
         ruta_icono_refrescar = os.path.join(self.base_dir, "imagenes", "refresh.png")
         try:
             imagen = Image.open(ruta_icono_refrescar)
@@ -674,15 +675,15 @@ class VentanaPrincipal(tk.Tk):
                 contenedor,
                 image=self.icono_refrescar,
                 command=self.actualizar_tabla_registros,
-                style="Secondary.TButton",
-            ).grid(row=0, column=4, sticky="e", pady=(22, 10))
+                style="IconOnly.TButton",
+            ).grid(row=0, column=4, sticky="e")
         except Exception:
             ttk.Button(
                 contenedor,
                 text="Refrescar",
                 command=self.actualizar_tabla_registros,
                 style="Secondary.TButton",
-            ).grid(row=0, column=4, sticky="e", pady=(22, 10))
+            ).grid(row=0, column=4, sticky="e")
 
     def _crear_tabla_registros(self, contenedor: ttk.LabelFrame) -> None:
         marco_tabla = ttk.Frame(contenedor)
