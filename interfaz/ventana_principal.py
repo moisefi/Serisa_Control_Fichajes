@@ -46,6 +46,9 @@ class VentanaPrincipal(tk.Tk):
         self._crear_estilos()
         self._configurar_icono_ventana()
         self._crear_interfaz()
+        if self._es_basic():
+            self.resumen_usuarios.set(self._obtener_nombre_usuario_basic())
+            self.resumen_tarjetas.set("Sin sincronizar")
 
         self.protocol("WM_DELETE_WINDOW", self._gestionar_cierre_ventana)
 
@@ -376,9 +379,12 @@ class VentanaPrincipal(tk.Tk):
         for i in range(4):
             resumen.columnconfigure(i, weight=1)
 
+        titulo_resumen_usuario = "Usuario" if self._es_basic() else "Usuarios activos"
+        titulo_resumen_tarjeta = "Nº Tarjeta" if self._es_basic() else "Tarjetas libres"
+
         self._crear_tarjeta_resumen(resumen, 0, "Registros visibles", self.resumen_registros)
-        self._crear_tarjeta_resumen(resumen, 1, "Usuarios activos", self.resumen_usuarios)
-        self._crear_tarjeta_resumen(resumen, 2, "Tarjetas libres", self.resumen_tarjetas)
+        self._crear_tarjeta_resumen(resumen, 1, titulo_resumen_usuario, self.resumen_usuarios)
+        self._crear_tarjeta_resumen(resumen, 2, titulo_resumen_tarjeta, self.resumen_tarjetas)
         self._crear_tarjeta_resumen(resumen, 3, "Última sincronización", self.resumen_actualizacion)
 
     def _crear_tarjeta_resumen(
@@ -829,6 +835,101 @@ class VentanaPrincipal(tk.Tk):
         self.resumen_registros.set(str(len(filas)))
         self.resumen_actualizacion.set(datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
         self.estado_tabla.set("Listo")
+
+    def _obtener_nombre_usuario_basic(self) -> str:
+        if self.sesion is None:
+            return ""
+        return (getattr(self.sesion, "username", "") or "").strip()
+
+    def _obtener_uid_usuario_basic(self, usuarios_asignados: list[tuple[str, str]]) -> str:
+        if self.sesion is None:
+            return "Sin asignar"
+
+        usuario_rfid = (getattr(self.sesion, "usuario_rfid", None) or "").strip()
+        if not usuario_rfid:
+            return "Sin asignar"
+
+        for nombre, uid in usuarios_asignados:
+            if nombre == usuario_rfid:
+                return uid
+
+        return "Sin asignar"
+
+    def _limpiar_estado_desconectado(self) -> None:
+        self.resumen_registros.set("0")
+        if self._es_basic():
+            self.resumen_usuarios.set(self._obtener_nombre_usuario_basic())
+            self.resumen_tarjetas.set("Sin sincronizar")
+        else:
+            self.resumen_usuarios.set("0")
+            self.resumen_tarjetas.set("0")
+        self.resumen_actualizacion.set("Sin sincronizar")
+        self.estado_tabla.set("Sin conexiÃ³n")
+
+        self.var_nombre_usuario.set("")
+        self.var_uid_tarjeta.set("")
+        self.var_uid_baja.set("")
+        self.var_filtro_usuario.set("")
+        self.var_filtro_uid.set("")
+        self.var_filtro_tipo.set("")
+        self.fecha_desde_filtro = None
+        self.fecha_hasta_filtro = None
+        if self.etiqueta_resumen_fechas is not None:
+            self.etiqueta_resumen_fechas.configure(text="Sin intervalo")
+
+        self.lista_usuarios = []
+        self.lista_uid = []
+        self.mapa_baja_usuario = {}
+
+        if self.tabla_registros is not None:
+            for elemento in self.tabla_registros.get_children():
+                self.tabla_registros.delete(elemento)
+
+        for combo in (self.combo_uid_alta, self.combo_uid_baja, self.combo_filtro_usuario, self.combo_filtro_uid, self.combo_filtro_tipo):
+            if combo is not None:
+                combo["values"] = ()
+
+    def _aplicar_datos_desplegables(self, datos_desplegables: dict) -> None:
+        uids_sin_asignar = datos_desplegables["uids_sin_asignar"]
+        usuarios_asignados = datos_desplegables["usuarios_asignados"]
+        tipos = datos_desplegables["tipos"]
+
+        if self.combo_uid_alta is not None:
+            self.combo_uid_alta["values"] = uids_sin_asignar
+            if self.var_uid_tarjeta.get() not in uids_sin_asignar:
+                self.var_uid_tarjeta.set("")
+
+        if self.combo_uid_baja is not None:
+            self.mapa_baja_usuario = {f"{nombre} ({uid})": uid for nombre, uid in usuarios_asignados}
+            opciones_baja = list(self.mapa_baja_usuario.keys())
+            self.combo_uid_baja["values"] = opciones_baja
+            if self.var_uid_baja.get() not in opciones_baja:
+                self.var_uid_baja.set("")
+
+        if self.combo_filtro_usuario is not None:
+            self.lista_usuarios = [""] + sorted(list({nombre for nombre, _uid in usuarios_asignados} | {"Sin asignar"}))
+            self.combo_filtro_usuario["values"] = self.lista_usuarios
+            if self.var_filtro_usuario.get() not in self.lista_usuarios:
+                self.var_filtro_usuario.set("")
+
+        if self.combo_filtro_uid is not None:
+            self.lista_uid = [""] + sorted(list({uid for _nombre, uid in usuarios_asignados} | set(uids_sin_asignar)))
+            self.combo_filtro_uid["values"] = self.lista_uid
+            if self.var_filtro_uid.get() not in self.lista_uid:
+                self.var_filtro_uid.set("")
+
+        if self.combo_filtro_tipo is not None:
+            opciones_tipo = [""] + sorted(list(set(tipos) | {"entrada", "salida"}))
+            self.combo_filtro_tipo["values"] = opciones_tipo
+            if self.var_filtro_tipo.get() not in opciones_tipo:
+                self.var_filtro_tipo.set("")
+
+        if self._es_basic():
+            self.resumen_usuarios.set(self._obtener_nombre_usuario_basic())
+            self.resumen_tarjetas.set(self._obtener_uid_usuario_basic(usuarios_asignados))
+        else:
+            self.resumen_usuarios.set(str(len({nombre for nombre, _uid in usuarios_asignados})))
+            self.resumen_tarjetas.set(str(len(uids_sin_asignar)))
 
     def _obtener_datos_pantalla(self) -> tuple[list[tuple], dict]:
         usuario_filtro = self.var_filtro_usuario.get().strip() or None
