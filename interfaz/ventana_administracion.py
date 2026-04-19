@@ -26,6 +26,7 @@ class VentanaAdministracion(tk.Toplevel):
         self.usuario_seleccionado_id: int | None = None
         self.usuarios_cache: list[dict] = []
         self.usuarios_rfid_disponibles: list[str] = []
+        self.usuarios_rfid_todos: list[str] = []
 
         self.var_username_sel = tk.StringVar()
         self.var_rol_sel = tk.StringVar(value="basic")
@@ -51,8 +52,8 @@ class VentanaAdministracion(tk.Toplevel):
         self._crear_interfaz()
         self._centrar()
 
-        self._cargar_usuarios_rfid()
         self._cargar_usuarios()
+        self._cargar_usuarios_rfid()
         self._actualizar_estado_botones()
 
         self.protocol("WM_DELETE_WINDOW", self.destroy)
@@ -433,14 +434,33 @@ class VentanaAdministracion(tk.Toplevel):
         try:
             datos = self.servicio_fichajes.obtener_datos_desplegables()
             usuarios_asignados = datos.get("usuarios_asignados", [])
-            self.usuarios_rfid_disponibles = sorted({nombre for nombre, _uid in usuarios_asignados})
+
+            # Todos los usuarios RFID existentes en fichajes
+            todos_rfid = sorted({nombre for nombre, _uid in usuarios_asignados})
+
+            # RFID ya usados en usuarios SERISA
+            rfid_en_uso = {
+                u["usuario_rfid"]
+                for u in self.usuarios_cache
+                if u.get("usuario_rfid")
+            }
+
+            # Solo disponibles para ALTA
+            self.usuarios_rfid_disponibles = [r for r in todos_rfid if r not in rfid_en_uso]
+
+            # Guardamos también todos para EDICIÓN
+            self.usuarios_rfid_todos = todos_rfid
+
         except Exception:
             self.logger.exception("No se pudieron cargar los usuarios RFID")
             self.usuarios_rfid_disponibles = []
+            self.usuarios_rfid_todos = []
 
-        valores = [""] + self.usuarios_rfid_disponibles
-        self.combo_usuario_rfid_sel["values"] = valores
-        self.combo_nuevo_usuario_rfid["values"] = valores
+        # Alta: solo disponibles
+        self.combo_nuevo_usuario_rfid["values"] = [""] + self.usuarios_rfid_disponibles
+
+        # Edición: todos
+        self.combo_usuario_rfid_sel["values"] = [""] + self.usuarios_rfid_todos
 
     def _cargar_usuarios(self) -> None:
         for item in self.tree.get_children():
@@ -525,6 +545,8 @@ class VentanaAdministracion(tk.Toplevel):
             return
 
         usuario_rfid = self.var_usuario_rfid_sel.get().strip()
+        rol = self.var_rol_sel.get().strip()
+        activo = self.var_activo_sel.get()
 
         if self._usuario_rfid_ya_asignado(usuario_rfid, self.usuario_seleccionado_id):
             messagebox.showwarning(
@@ -533,19 +555,37 @@ class VentanaAdministracion(tk.Toplevel):
             )
             return
 
+        username = self.var_username_sel.get().strip()
+        activo_texto = "Sí" if activo else "No"
+        usuario_rfid_texto = usuario_rfid if usuario_rfid else "Sin asignar"
+
+        confirmado = messagebox.askyesno(
+            "Confirmar cambios",
+            (
+                f"¿Quieres guardar los cambios del usuario '{username}'?\n\n"
+                f"Rol: {rol}\n"
+                f"Activo: {activo_texto}\n"
+                f"Usuario RFID: {usuario_rfid_texto}"
+            ),
+            parent=self,
+        )
+        if not confirmado:
+            return
+
         try:
             self.servicio_autenticacion.actualizar_usuario(
                 user_id=self.usuario_seleccionado_id,
-                rol=self.var_rol_sel.get(),
-                activo=self.var_activo_sel.get(),
-                usuario_rfid=self.var_usuario_rfid_sel.get(),
+                rol=rol,
+                activo=activo,
+                usuario_rfid=usuario_rfid,
             )
             self._cargar_usuarios()
+            self._cargar_usuarios_rfid()
             self._set_estado("Usuario actualizado correctamente.")
-            messagebox.showinfo("Correcto", "Usuario actualizado correctamente.")
+            messagebox.showinfo("Correcto", "Usuario actualizado correctamente.", parent=self)
         except Exception as e:
             self.logger.exception("Error actualizando usuario")
-            messagebox.showerror("Error", str(e))
+            messagebox.showerror("Error", str(e), parent=self)
 
     def _registrar_usuario(self) -> None:
         username = self.var_nuevo_username.get().strip()
@@ -554,14 +594,34 @@ class VentanaAdministracion(tk.Toplevel):
         usuario_rfid = self.var_nuevo_usuario_rfid.get().strip()
 
         if not username or not rol or not password:
-            messagebox.showwarning("Campos obligatorios", "Debes completar nombre, rol y contraseña.")
+            messagebox.showwarning(
+                "Campos obligatorios",
+                "Debes completar nombre, rol y contraseña.",
+                parent=self,
+            )
             return
 
         if self._usuario_rfid_ya_asignado(usuario_rfid):
             messagebox.showwarning(
                 "RFID en uso",
                 f"El usuario RFID '{usuario_rfid}' ya está asignado a otro usuario.",
+                parent=self,
             )
+            return
+
+        usuario_rfid_texto = usuario_rfid if usuario_rfid else "Sin asignar"
+
+        confirmado = messagebox.askyesno(
+            "Confirmar registro",
+            (
+                f"¿Quieres registrar este usuario?\n\n"
+                f"Nombre: {username}\n"
+                f"Rol: {rol}\n"
+                f"Usuario RFID: {usuario_rfid_texto}"
+            ),
+            parent=self,
+        )
+        if not confirmado:
             return
 
         try:
@@ -577,11 +637,12 @@ class VentanaAdministracion(tk.Toplevel):
             self.var_nueva_password.set("")
             self.var_nuevo_usuario_rfid.set("")
             self._cargar_usuarios()
+            self._cargar_usuarios_rfid()
             self._set_estado("Usuario creado correctamente.")
-            messagebox.showinfo("Correcto", "Usuario creado correctamente.")
+            messagebox.showinfo("Correcto", "Usuario creado correctamente.", parent=self)
         except Exception as e:
             self.logger.exception("Error creando usuario")
-            messagebox.showerror("Error", str(e))
+            messagebox.showerror("Error", str(e), parent=self)
 
     def _eliminar_usuario(self) -> None:
         username = self.var_eliminar_username.get().strip()
