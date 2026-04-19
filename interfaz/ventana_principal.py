@@ -255,6 +255,16 @@ class VentanaPrincipal(tk.Tk):
         estilo.map("Secondary.TButton", background=[("active", secundario)])
 
         estilo.configure(
+            "IconOnly.TButton",
+            padding=(2, 2),
+            background=superficie,
+            foreground=texto,
+            borderwidth=1,
+            relief="solid",
+        )
+        estilo.map("IconOnly.TButton", background=[("active", secundario)])
+
+        estilo.configure(
             "Accent.TButton",
             font=fuente_bold,
             padding=(12, 12),
@@ -496,7 +506,8 @@ class VentanaPrincipal(tk.Tk):
         marco.columnconfigure(1, weight=0)
         marco.rowconfigure(0, weight=0)
         marco.rowconfigure(1, weight=0)
-        marco.rowconfigure(2, weight=1)
+        marco.rowconfigure(2, weight=0)
+        marco.rowconfigure(3, weight=1)
 
         texto_ayuda = "Consulta los registros recientes del sistema."
         if self._puede_editar_registros():
@@ -506,16 +517,17 @@ class VentanaPrincipal(tk.Tk):
         self.etiqueta_estado_tabla = ttk.Label(marco, textvariable=self.estado_tabla, style="Muted.TLabel")
         self.etiqueta_estado_tabla.grid(row=0, column=1, sticky="e", pady=(0, 10))
 
+        self._crear_bloque_intervalo_fecha(marco)
+
         marco_filtros = ttk.Frame(marco)
-        marco_filtros.grid(row=1, column=0, columnspan=2, sticky="ew")
-        for i in range(4):
+        marco_filtros.grid(row=2, column=0, columnspan=2, sticky="ew")
+        for i in range(3):
             marco_filtros.columnconfigure(i, weight=1)
+        marco_filtros.columnconfigure(3, weight=0)
         marco_filtros.columnconfigure(4, weight=0)
-        marco_filtros.columnconfigure(5, weight=0)
 
         self._crear_bloque_filtro_usuario(marco_filtros)
         self._crear_bloque_filtro_uid(marco_filtros)
-        self._crear_bloque_filtro_fecha(marco_filtros)
         self._crear_bloque_filtro_tipo(marco_filtros)
         self._crear_acciones_filtros(marco_filtros)
         self._crear_tabla_registros(marco)
@@ -541,6 +553,50 @@ class VentanaPrincipal(tk.Tk):
         self.combo_filtro_uid = ttk.Combobox(bloque_uid, textvariable=self.var_filtro_uid, state="normal")
         self.combo_filtro_uid.pack(fill="x", pady=(4, 0))
         self.combo_filtro_uid.bind("<KeyRelease>", self._filtrar_uid)
+
+    def _crear_bloque_intervalo_fecha(self, contenedor: ttk.LabelFrame) -> None:
+        marco_intervalo = ttk.Frame(contenedor)
+        marco_intervalo.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+        marco_intervalo.columnconfigure(0, weight=1)
+
+        ttk.Label(marco_intervalo, text="Fecha", style="Muted.TLabel").grid(row=0, column=0, sticky="w")
+
+        fila_intervalo = ttk.Frame(marco_intervalo)
+        fila_intervalo.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+        fila_intervalo.columnconfigure(0, weight=1)
+
+        self.etiqueta_resumen_fechas = ttk.Label(
+            fila_intervalo,
+            text="Sin intervalo",
+            style="Card.TLabel",
+        )
+        self.etiqueta_resumen_fechas.grid(row=0, column=0, sticky="w")
+
+        self._crear_boton_calendario(fila_intervalo)
+
+    def _crear_boton_calendario(self, contenedor: ttk.Frame) -> None:
+        ruta_icono_calendario = os.path.join(self.base_dir, "imagenes", "calendario.png")
+
+        try:
+            imagen = Image.open(ruta_icono_calendario)
+            imagen = imagen.resize((24, 24))
+            self.icono_calendario = ImageTk.PhotoImage(imagen)
+
+            ttk.Button(
+                contenedor,
+                image=self.icono_calendario,
+                command=self.abrir_selector_intervalo_fechas,
+                style="IconOnly.TButton",
+            ).grid(row=0, column=1, sticky="e", padx=(8, 0))
+
+        except Exception:
+            ttk.Button(
+                contenedor,
+                text="Fecha",
+                command=self.abrir_selector_intervalo_fechas,
+                style="Secondary.TButton",
+            ).grid(row=0, column=1, sticky="e", padx=(8, 0))
+
 
     def _crear_bloque_filtro_fecha(self, contenedor: ttk.Frame) -> None:
         bloque_fecha = ttk.Frame(contenedor)
@@ -577,14 +633,14 @@ class VentanaPrincipal(tk.Tk):
 
     def _crear_bloque_filtro_tipo(self, contenedor: ttk.Frame) -> None:
         bloque_tipo = ttk.Frame(contenedor)
-        bloque_tipo.grid(row=0, column=3, sticky="ew", padx=(0, 10), pady=(0, 10))
+        bloque_tipo.grid(row=0, column=2, sticky="ew", padx=(0, 10), pady=(0, 10))
         ttk.Label(bloque_tipo, text="Tipo", style="Muted.TLabel").pack(anchor="w")
         self.combo_filtro_tipo = ttk.Combobox(bloque_tipo, textvariable=self.var_filtro_tipo, state="readonly")
         self.combo_filtro_tipo.pack(fill="x", pady=(4, 0))
 
     def _crear_acciones_filtros(self, contenedor: ttk.Frame) -> None:
         acciones = ttk.Frame(contenedor)
-        acciones.grid(row=0, column=4, sticky="e", pady=(22, 10))
+        acciones.grid(row=0, column=3, sticky="e", pady=(22, 10))
 
         ttk.Button(
             acciones,
@@ -613,18 +669,18 @@ class VentanaPrincipal(tk.Tk):
                 image=self.icono_refrescar,
                 command=self.actualizar_tabla_registros,
                 style="Secondary.TButton",
-            ).grid(row=0, column=5, sticky="e", pady=(22, 10))
+            ).grid(row=0, column=4, sticky="e", pady=(22, 10))
         except Exception:
             ttk.Button(
                 contenedor,
                 text="Refrescar",
                 command=self.actualizar_tabla_registros,
                 style="Secondary.TButton",
-            ).grid(row=0, column=5, sticky="e", pady=(22, 10))
+            ).grid(row=0, column=4, sticky="e", pady=(22, 10))
 
     def _crear_tabla_registros(self, contenedor: ttk.LabelFrame) -> None:
         marco_tabla = ttk.Frame(contenedor)
-        marco_tabla.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=(4, 0))
+        marco_tabla.grid(row=3, column=0, columnspan=2, sticky="nsew", pady=(4, 0))
         marco_tabla.columnconfigure(0, weight=1)
         marco_tabla.rowconfigure(0, weight=1)
 
@@ -1222,7 +1278,7 @@ class VentanaPrincipal(tk.Tk):
                 self.fecha_hasta_filtro = fecha_hasta
                 if self.etiqueta_resumen_fechas is not None:
                     self.etiqueta_resumen_fechas.configure(
-                        text=f"{fecha_desde.strftime('%Y-%m-%d %H:%M')} → {fecha_hasta.strftime('%Y-%m-%d %H:%M')}"
+                        text=f"{fecha_desde.strftime('%d/%m %H:%M')} → {fecha_hasta.strftime('%d/%m %H:%M')}"
                     )
                 ventana.destroy()
                 self.actualizar_tabla_registros()
