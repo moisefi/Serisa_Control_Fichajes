@@ -99,6 +99,7 @@ class VentanaPrincipal(tk.Tk):
         self.logo_principal = None
         self.icono_refrescar = None
         self.icono_ventana = None
+        self.icono_calendario = None
 
     def _configurar_ventana(self) -> None:
         self.title("SERISA · Gestión de fichajes")
@@ -551,12 +552,28 @@ class VentanaPrincipal(tk.Tk):
         self.etiqueta_resumen_fechas = ttk.Label(fila_fecha, text="Sin intervalo", style="Card.TLabel")
         self.etiqueta_resumen_fechas.pack(side="left", fill="x", expand=True)
 
-        ttk.Button(
-            fila_fecha,
-            text="Cambiar",
-            command=self.abrir_selector_intervalo_fechas,
-            style="Secondary.TButton",
-        ).pack(side="right", padx=(8, 0))
+        ruta_icono_calendario = os.path.join(self.base_dir, "imagenes", "calendario.png")
+
+        try:
+            imagen = Image.open(ruta_icono_calendario)
+            imagen = imagen.resize((18, 18))  # ajusta si quieres más grande
+            self.icono_calendario = ImageTk.PhotoImage(imagen)
+
+            ttk.Button(
+                fila_fecha,
+                image=self.icono_calendario,
+                command=self.abrir_selector_intervalo_fechas,
+                style="Secondary.TButton",
+            ).pack(side="right", padx=(8, 0))
+
+        except Exception:
+            # fallback por si falla la imagen
+            ttk.Button(
+                fila_fecha,
+                text="Editar",
+                command=self.abrir_selector_intervalo_fechas,
+                style="Secondary.TButton",
+            ).pack(side="right", padx=(8, 0))
 
     def _crear_bloque_filtro_tipo(self, contenedor: ttk.Frame) -> None:
         bloque_tipo = ttk.Frame(contenedor)
