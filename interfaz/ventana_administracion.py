@@ -788,7 +788,7 @@ class VentanaAdministracion(tk.Toplevel):
                 self.fecha_desde_filtro = fecha_desde
                 self.fecha_hasta_filtro = fecha_hasta
                 self.etiqueta_resumen_fechas.configure(
-                    text=f"{fecha_desde.strftime('%d/%m %H:%M')} -> {fecha_hasta.strftime('%d/%m %H:%M')}"
+                    text=f"{fecha_desde.strftime('%d/%m %H:%M')} a {fecha_hasta.strftime('%d/%m %H:%M')}"
                 )
                 ventana.destroy()
                 self._aplicar_filtros_usuarios()
@@ -874,6 +874,10 @@ class VentanaAdministracion(tk.Toplevel):
                 tags=(tag,),
             )
 
+    def _refrescar_datos_usuarios(self) -> None:
+        self._cargar_usuarios()
+        self._cargar_usuarios_rfid()
+
     # =========================
     # ACCIONES
     # =========================
@@ -917,8 +921,7 @@ class VentanaAdministracion(tk.Toplevel):
                 activo=activo,
                 usuario_rfid=usuario_rfid,
             )
-            self._cargar_usuarios()
-            self._cargar_usuarios_rfid()
+            self._refrescar_datos_usuarios()
             self._set_estado("Usuario actualizado correctamente.")
             messagebox.showinfo("Correcto", "Usuario actualizado correctamente.", parent=self)
         except Exception as e:
@@ -974,8 +977,7 @@ class VentanaAdministracion(tk.Toplevel):
             self.var_nuevo_rol.set("basic")
             self.var_nueva_password.set("")
             self.var_nuevo_usuario_rfid.set("")
-            self._cargar_usuarios()
-            self._cargar_usuarios_rfid()
+            self._refrescar_datos_usuarios()
             self._set_estado("Usuario creado correctamente.")
             messagebox.showinfo("Correcto", "Usuario creado correctamente.", parent=self)
         except Exception as e:
@@ -1002,7 +1004,7 @@ class VentanaAdministracion(tk.Toplevel):
         try:
             self.servicio_autenticacion.eliminar_usuario(username)
             self._limpiar_panel_edicion()
-            self._cargar_usuarios()
+            self._refrescar_datos_usuarios()
             self._set_estado("Usuario eliminado correctamente.")
             messagebox.showinfo("Correcto", "Usuario eliminado correctamente.")
         except Exception as e:
