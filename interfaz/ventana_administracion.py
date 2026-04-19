@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import os
 import tkinter as tk
+from datetime import datetime
 from tkinter import font as tkfont
 from tkinter import messagebox, ttk
+
+from PIL import Image, ImageTk
+from tkcalendar import DateEntry
 
 
 class VentanaAdministracion(tk.Toplevel):
@@ -22,11 +26,16 @@ class VentanaAdministracion(tk.Toplevel):
 
         self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.icono_ventana = None
+        self.icono_calendario = None
 
         self.usuario_seleccionado_id: int | None = None
         self.usuarios_cache: list[dict] = []
         self.usuarios_rfid_disponibles: list[str] = []
         self.usuarios_rfid_todos: list[str] = []
+        self.lista_filtro_usuarios: list[str] = []
+        self.lista_filtro_rfid: list[str] = []
+        self.fecha_desde_filtro: datetime | None = None
+        self.fecha_hasta_filtro: datetime | None = None
 
         self.var_username_sel = tk.StringVar()
         self.var_rol_sel = tk.StringVar(value="basic")
@@ -40,6 +49,9 @@ class VentanaAdministracion(tk.Toplevel):
 
         self.var_eliminar_username = tk.StringVar()
         self.var_estado = tk.StringVar(value="Selecciona un usuario o crea uno nuevo.")
+        self.var_filtro_usuario = tk.StringVar()
+        self.var_filtro_usuario_rfid = tk.StringVar()
+        self.var_filtro_rol = tk.StringVar()
 
         self.title("Administración · Usuarios SERISA")
         self.geometry("1160x880")
@@ -54,6 +66,8 @@ class VentanaAdministracion(tk.Toplevel):
 
         self._cargar_usuarios()
         self._cargar_usuarios_rfid()
+        self._cargar_opciones_filtros()
+        self._aplicar_filtros_usuarios()
         self._actualizar_estado_botones()
 
         self.protocol("WM_DELETE_WINDOW", self.destroy)
@@ -139,6 +153,18 @@ class VentanaAdministracion(tk.Toplevel):
             font=self.fuente_estado,
         )
         estilo.configure(
+            "Muted.TLabel",
+            background=superficie,
+            foreground=texto_suave,
+            font=self.fuente_subtitulo,
+        )
+        estilo.configure(
+            "Card.TLabel",
+            background=superficie,
+            foreground=texto,
+            font=self.fuente_base,
+        )
+        estilo.configure(
             "Section.TLabelframe",
             background=superficie,
             borderwidth=1,
@@ -178,6 +204,15 @@ class VentanaAdministracion(tk.Toplevel):
             "Secondary.TButton",
             background=[("active", secundario_hover)],
         )
+        estilo.configure(
+            "IconOnly.TButton",
+            padding=(2, 2),
+            background=superficie,
+            foreground=texto,
+            borderwidth=1,
+            relief="solid",
+        )
+        estilo.map("IconOnly.TButton", background=[("active", secundario_hover)])
 
         estilo.configure(
             "TEntry",
@@ -272,9 +307,21 @@ class VentanaAdministracion(tk.Toplevel):
             style="Status.TLabel",
         ).pack(anchor="w", pady=(0, 12))
 
+        bloque_listado = ttk.LabelFrame(
+            panel_izq,
+            text="Listado de usuarios",
+            style="Section.TLabelframe",
+            padding=14,
+        )
+        bloque_listado.pack(fill="both", expand=True)
+        bloque_listado.columnconfigure(0, weight=1)
+        bloque_listado.rowconfigure(1, weight=1)
+
+        self._crear_bloque_filtros(bloque_listado)
+
         columnas = ("username", "rol", "activo", "usuario_rfid", "creado_en")
-        marco_tabla = ttk.Frame(panel_izq, style="Card.TFrame")
-        marco_tabla.pack(fill="both", expand=True)
+        marco_tabla = ttk.Frame(bloque_listado, style="Card.TFrame")
+        marco_tabla.grid(row=1, column=0, sticky="nsew")
 
         marco_tabla.columnconfigure(0, weight=1)
         marco_tabla.rowconfigure(0, weight=1)
@@ -427,6 +474,121 @@ class VentanaAdministracion(tk.Toplevel):
         )
         self.boton_eliminar.pack(fill="x")
 
+    def _crear_bloque_filtros(self, contenedor: ttk.Frame) -> None:
+        marco = ttk.Frame(contenedor, style="Card.TFrame")
+        marco.grid(row=0, column=0, sticky="ew", pady=(0, 12))
+        marco.columnconfigure(0, weight=1)
+        marco.columnconfigure(1, weight=0)
+
+        ttk.Label(
+            marco,
+            text="Filtra usuarios por nombre, RFID, rol y fecha de creación.",
+            style="Muted.TLabel",
+        ).grid(row=0, column=0, sticky="w", pady=(0, 10))
+
+        self.etiqueta_estado_filtros = ttk.Label(marco, text="Mostrando todos", style="Muted.TLabel")
+        self.etiqueta_estado_filtros.grid(row=0, column=1, sticky="e", pady=(0, 10))
+
+        self._crear_bloque_intervalo_fecha(marco)
+
+        marco_filtros = ttk.Frame(marco, style="Card.TFrame")
+        marco_filtros.grid(row=2, column=0, columnspan=2, sticky="ew")
+        for i in range(3):
+            marco_filtros.columnconfigure(i, weight=1)
+        marco_filtros.columnconfigure(3, weight=0)
+
+        self._crear_bloque_filtro_usuario(marco_filtros)
+        self._crear_bloque_filtro_rfid(marco_filtros)
+        self._crear_bloque_filtro_rol(marco_filtros)
+        self._crear_acciones_filtros(marco_filtros)
+
+    def _crear_bloque_intervalo_fecha(self, contenedor: ttk.Frame) -> None:
+        marco_intervalo = ttk.Frame(contenedor, style="Card.TFrame")
+        marco_intervalo.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+        marco_intervalo.columnconfigure(0, weight=1)
+
+        ttk.Label(marco_intervalo, text="Fecha", style="Muted.TLabel").grid(row=0, column=0, sticky="w")
+
+        fila_intervalo = ttk.Frame(marco_intervalo, style="Card.TFrame")
+        fila_intervalo.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+        fila_intervalo.columnconfigure(0, weight=1)
+
+        self.etiqueta_resumen_fechas = ttk.Label(
+            fila_intervalo,
+            text="Sin intervalo",
+            style="Card.TLabel",
+        )
+        self.etiqueta_resumen_fechas.grid(row=0, column=0, sticky="w")
+
+        self._crear_boton_calendario(fila_intervalo)
+
+    def _crear_boton_calendario(self, contenedor: ttk.Frame) -> None:
+        ruta_icono_calendario = os.path.join(self.base_dir, "imagenes", "calendario.png")
+
+        try:
+            imagen = Image.open(ruta_icono_calendario)
+            imagen = imagen.resize((24, 24))
+            self.icono_calendario = ImageTk.PhotoImage(imagen)
+
+            ttk.Button(
+                contenedor,
+                image=self.icono_calendario,
+                command=self.abrir_selector_intervalo_fechas,
+                style="IconOnly.TButton",
+            ).grid(row=0, column=1, sticky="e", padx=(8, 0))
+        except Exception:
+            ttk.Button(
+                contenedor,
+                text="Fecha",
+                command=self.abrir_selector_intervalo_fechas,
+                style="Secondary.TButton",
+            ).grid(row=0, column=1, sticky="e", padx=(8, 0))
+
+    def _crear_bloque_filtro_usuario(self, contenedor: ttk.Frame) -> None:
+        bloque = ttk.Frame(contenedor, style="Card.TFrame")
+        bloque.grid(row=0, column=0, sticky="ew", padx=(0, 10), pady=(0, 10))
+        ttk.Label(bloque, text="Usuario", style="Muted.TLabel").pack(anchor="w")
+        self.combo_filtro_usuario = ttk.Combobox(bloque, textvariable=self.var_filtro_usuario, state="normal")
+        self.combo_filtro_usuario.pack(fill="x", pady=(4, 0))
+        self.combo_filtro_usuario.bind("<KeyRelease>", self._filtrar_usuario)
+
+    def _crear_bloque_filtro_rfid(self, contenedor: ttk.Frame) -> None:
+        bloque = ttk.Frame(contenedor, style="Card.TFrame")
+        bloque.grid(row=0, column=1, sticky="ew", padx=(0, 10), pady=(0, 10))
+        ttk.Label(bloque, text="Usuario RFID", style="Muted.TLabel").pack(anchor="w")
+        self.combo_filtro_usuario_rfid = ttk.Combobox(
+            bloque,
+            textvariable=self.var_filtro_usuario_rfid,
+            state="normal",
+        )
+        self.combo_filtro_usuario_rfid.pack(fill="x", pady=(4, 0))
+        self.combo_filtro_usuario_rfid.bind("<KeyRelease>", self._filtrar_usuario_rfid)
+
+    def _crear_bloque_filtro_rol(self, contenedor: ttk.Frame) -> None:
+        bloque = ttk.Frame(contenedor, style="Card.TFrame")
+        bloque.grid(row=0, column=2, sticky="ew", padx=(0, 10), pady=(0, 10))
+        ttk.Label(bloque, text="Rol", style="Muted.TLabel").pack(anchor="w")
+        self.combo_filtro_rol = ttk.Combobox(bloque, textvariable=self.var_filtro_rol, state="readonly")
+        self.combo_filtro_rol.pack(fill="x", pady=(4, 0))
+
+    def _crear_acciones_filtros(self, contenedor: ttk.Frame) -> None:
+        acciones = ttk.Frame(contenedor, style="Card.TFrame")
+        acciones.grid(row=0, column=3, sticky="e", pady=(22, 10))
+
+        ttk.Button(
+            acciones,
+            text="Aplicar filtros",
+            command=self._aplicar_filtros_usuarios,
+            style="Primary.TButton",
+        ).pack(side="left", padx=(0, 8))
+
+        ttk.Button(
+            acciones,
+            text="Limpiar",
+            command=self._limpiar_filtros,
+            style="Secondary.TButton",
+        ).pack(side="left")
+
     # =========================
     # DATOS
     # =========================
@@ -461,12 +623,16 @@ class VentanaAdministracion(tk.Toplevel):
 
         # Edición: todos
         self.combo_usuario_rfid_sel["values"] = [""] + self.usuarios_rfid_todos
+        self._cargar_opciones_filtros()
+        self._aplicar_filtros_usuarios()
 
     def _cargar_usuarios(self) -> None:
+        self.usuarios_cache = self.servicio_autenticacion.listar_usuarios()
+        self._repintar_tabla_usuarios(self.usuarios_cache)
+        return
+
         for item in self.tree.get_children():
             self.tree.delete(item)
-
-        self.usuarios_cache = self.servicio_autenticacion.listar_usuarios()
 
         for indice, usuario in enumerate(self.usuarios_cache):
             creado = usuario["creado_en"].strftime("%Y-%m-%d %H:%M") if usuario["creado_en"] else ""
@@ -484,6 +650,40 @@ class VentanaAdministracion(tk.Toplevel):
 
     def _obtener_usuario_cache_por_id(self, user_id: int) -> dict | None:
         return next((u for u in self.usuarios_cache if u["id"] == user_id), None)
+
+    def _repintar_tabla_usuarios(self, usuarios: list[dict]) -> None:
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        for indice, usuario in enumerate(usuarios):
+            creado = usuario["creado_en"].strftime("%Y-%m-%d %H:%M") if usuario["creado_en"] else ""
+            activo = "SÃ­" if usuario["activo"] else "No"
+            usuario_rfid = usuario["usuario_rfid"] or ""
+            tag = "par" if indice % 2 == 0 else "impar"
+
+            self.tree.insert(
+                "",
+                "end",
+                iid=str(usuario["id"]),
+                values=(usuario["username"], usuario["rol"], activo, usuario_rfid, creado),
+                tags=(tag,),
+            )
+
+    def _cargar_opciones_filtros(self) -> None:
+        self.lista_filtro_usuarios = [""] + sorted({u["username"] for u in self.usuarios_cache if u.get("username")})
+        self.lista_filtro_rfid = [""] + sorted({u["usuario_rfid"] for u in self.usuarios_cache if u.get("usuario_rfid")})
+        opciones_roles = [""] + sorted({u["rol"] for u in self.usuarios_cache if u.get("rol")})
+
+        self.combo_filtro_usuario["values"] = self.lista_filtro_usuarios
+        self.combo_filtro_usuario_rfid["values"] = self.lista_filtro_rfid
+        self.combo_filtro_rol["values"] = opciones_roles
+
+        if self.var_filtro_usuario.get() not in self.lista_filtro_usuarios:
+            self.var_filtro_usuario.set("")
+        if self.var_filtro_usuario_rfid.get() not in self.lista_filtro_rfid:
+            self.var_filtro_usuario_rfid.set("")
+        if self.var_filtro_rol.get() not in opciones_roles:
+            self.var_filtro_rol.set("")
 
     # =========================
     # ESTADO
@@ -510,6 +710,10 @@ class VentanaAdministracion(tk.Toplevel):
     def _set_estado(self, texto: str) -> None:
         self.var_estado.set(texto)
 
+    def _set_estado_filtros(self, total_visible: int) -> None:
+        texto_fechas = " con intervalo" if self.fecha_desde_filtro or self.fecha_hasta_filtro else ""
+        self.etiqueta_estado_filtros.configure(text=f"{total_visible} visibles{texto_fechas}")
+
     # =========================
     # EVENTOS
     # =========================
@@ -535,6 +739,140 @@ class VentanaAdministracion(tk.Toplevel):
 
         self._actualizar_estado_botones()
         self._set_estado(f"Editando usuario: {usuario['username']}")
+
+    def abrir_selector_intervalo_fechas(self) -> None:
+        ventana = tk.Toplevel(self)
+        ventana.title("Seleccionar intervalo de fechas")
+        ventana.geometry("580x450")
+        ventana.resizable(False, False)
+        ventana.transient(self)
+        ventana.grab_set()
+        ventana.configure(bg=self.colores["fondo"])
+
+        frame = ttk.Frame(ventana, padding=18, style="App.TFrame")
+        frame.pack(fill="both", expand=True)
+        ttk.Label(
+            frame,
+            text="Acota la búsqueda por rango de fecha y hora de creación.",
+            style="Muted.TLabel",
+        ).pack(anchor="w", pady=(0, 12))
+        ttk.Label(frame, text="Fecha desde", style="Card.TLabel").pack(anchor="w")
+        calendario_desde = DateEntry(frame, date_pattern="yyyy-mm-dd")
+        calendario_desde.pack(fill="x", pady=(4, 0))
+        ttk.Label(frame, text="Hora desde (HH:MM:SS)", style="Card.TLabel").pack(anchor="w", pady=(10, 0))
+        entrada_hora_desde = ttk.Entry(frame)
+        entrada_hora_desde.insert(0, "00:00:00")
+        entrada_hora_desde.pack(fill="x", pady=(4, 0))
+        ttk.Label(frame, text="Fecha hasta", style="Card.TLabel").pack(anchor="w", pady=(10, 0))
+        calendario_hasta = DateEntry(frame, date_pattern="yyyy-mm-dd")
+        calendario_hasta.pack(fill="x", pady=(4, 0))
+        ttk.Label(frame, text="Hora hasta (HH:MM:SS)", style="Card.TLabel").pack(anchor="w", pady=(10, 0))
+        entrada_hora_hasta = ttk.Entry(frame)
+        entrada_hora_hasta.insert(0, datetime.now().strftime("%H:%M:%S"))
+        entrada_hora_hasta.pack(fill="x", pady=(4, 0))
+
+        def aceptar() -> None:
+            try:
+                hora_desde = entrada_hora_desde.get().strip() or "00:00:00"
+                hora_hasta = entrada_hora_hasta.get().strip() or "23:59:59"
+                fecha_desde = datetime.strptime(f"{calendario_desde.get()} {hora_desde}", "%Y-%m-%d %H:%M:%S")
+                fecha_hasta = datetime.strptime(f"{calendario_hasta.get()} {hora_hasta}", "%Y-%m-%d %H:%M:%S")
+                if fecha_desde > fecha_hasta:
+                    messagebox.showwarning(
+                        "Rango incorrecto",
+                        "La fecha 'desde' no puede ser mayor que la fecha 'hasta'",
+                        parent=ventana,
+                    )
+                    return
+
+                self.fecha_desde_filtro = fecha_desde
+                self.fecha_hasta_filtro = fecha_hasta
+                self.etiqueta_resumen_fechas.configure(
+                    text=f"{fecha_desde.strftime('%d/%m %H:%M')} -> {fecha_hasta.strftime('%d/%m %H:%M')}"
+                )
+                ventana.destroy()
+                self._aplicar_filtros_usuarios()
+            except ValueError:
+                messagebox.showwarning("Formato no válido", "La hora debe tener formato HH:MM:SS", parent=ventana)
+
+        acciones = ttk.Frame(frame, style="App.TFrame")
+        acciones.pack(fill="x", pady=18)
+        ttk.Button(acciones, text="Cancelar", command=ventana.destroy, style="Secondary.TButton").pack(side="left")
+        ttk.Button(acciones, text="Guardar intervalo", command=aceptar, style="Primary.TButton").pack(side="right")
+
+    def _filtrar_usuario(self, _event=None) -> None:
+        texto = self.var_filtro_usuario.get().strip().lower()
+        filtrados = self.lista_filtro_usuarios if not texto else [u for u in self.lista_filtro_usuarios if texto in u.lower()]
+        self.combo_filtro_usuario["values"] = filtrados
+        if len(filtrados) == 1:
+            self.var_filtro_usuario.set(filtrados[0])
+
+    def _filtrar_usuario_rfid(self, _event=None) -> None:
+        texto = self.var_filtro_usuario_rfid.get().strip().lower()
+        filtrados = self.lista_filtro_rfid if not texto else [u for u in self.lista_filtro_rfid if texto in u.lower()]
+        self.combo_filtro_usuario_rfid["values"] = filtrados
+        if len(filtrados) == 1:
+            self.var_filtro_usuario_rfid.set(filtrados[0])
+
+    def _limpiar_filtros(self) -> None:
+        self.var_filtro_usuario.set("")
+        self.var_filtro_usuario_rfid.set("")
+        self.var_filtro_rol.set("")
+        self.fecha_desde_filtro = None
+        self.fecha_hasta_filtro = None
+        self.etiqueta_resumen_fechas.configure(text="Sin intervalo")
+        self._cargar_opciones_filtros()
+        self._aplicar_filtros_usuarios()
+
+    def _aplicar_filtros_usuarios(self) -> None:
+        usuario_filtro = self.var_filtro_usuario.get().strip().lower()
+        usuario_rfid_filtro = self.var_filtro_usuario_rfid.get().strip().lower()
+        rol_filtro = self.var_filtro_rol.get().strip().lower()
+
+        usuarios_filtrados = []
+        for usuario in self.usuarios_cache:
+            username = (usuario.get("username") or "").strip()
+            usuario_rfid = (usuario.get("usuario_rfid") or "").strip()
+            rol = (usuario.get("rol") or "").strip()
+            creado_en = usuario.get("creado_en")
+
+            if usuario_filtro and usuario_filtro not in username.lower():
+                continue
+            if usuario_rfid_filtro and usuario_rfid_filtro not in usuario_rfid.lower():
+                continue
+            if rol_filtro and rol_filtro != rol.lower():
+                continue
+            if self.fecha_desde_filtro and (not creado_en or creado_en < self.fecha_desde_filtro):
+                continue
+            if self.fecha_hasta_filtro and (not creado_en or creado_en > self.fecha_hasta_filtro):
+                continue
+
+            usuarios_filtrados.append(usuario)
+
+        self._repintar_tabla_usuarios(usuarios_filtrados)
+        self._set_estado_filtros(len(usuarios_filtrados))
+
+    def _cargar_usuarios(self) -> None:
+        self.usuarios_cache = self.servicio_autenticacion.listar_usuarios()
+        self._repintar_tabla_usuarios(self.usuarios_cache)
+
+    def _repintar_tabla_usuarios(self, usuarios: list[dict]) -> None:
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        for indice, usuario in enumerate(usuarios):
+            creado = usuario["creado_en"].strftime("%Y-%m-%d %H:%M") if usuario["creado_en"] else ""
+            activo = "✓" if usuario["activo"] else "✗"
+            usuario_rfid = usuario["usuario_rfid"] or ""
+            tag = "par" if indice % 2 == 0 else "impar"
+
+            self.tree.insert(
+                "",
+                "end",
+                iid=str(usuario["id"]),
+                values=(usuario["username"], usuario["rol"], activo, usuario_rfid, creado),
+                tags=(tag,),
+            )
 
     # =========================
     # ACCIONES
