@@ -2,8 +2,8 @@
     "ip_bd": "192.168.18.3",
     "hostname_raspberry": "rpi-fichajes",
     "puerto_bd": 5432,
-    "usuario_bd": "srojo",
-    "contrasena_bd": "srojo",
+    "usuario_bd": "",
+    "contrasena_bd": "",
     "nombre_bd": "fichajes",
     "intervalo_refresco_ms": 60000
 }
