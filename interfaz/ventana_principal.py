@@ -865,7 +865,7 @@ class VentanaPrincipal(tk.Tk):
             self.resumen_usuarios.set("0")
             self.resumen_tarjetas.set("0")
         self.resumen_actualizacion.set("Sin sincronizar")
-        self.estado_tabla.set("Sin conexiÃ³n")
+        self.estado_tabla.set("Sin conexión")
 
         self.var_nombre_usuario.set("")
         self.var_uid_tarjeta.set("")

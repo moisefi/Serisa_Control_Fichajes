@@ -657,7 +657,7 @@ class VentanaAdministracion(tk.Toplevel):
 
         for indice, usuario in enumerate(usuarios):
             creado = usuario["creado_en"].strftime("%Y-%m-%d %H:%M") if usuario["creado_en"] else ""
-            activo = "SÃ­" if usuario["activo"] else "No"
+            activo = "Sí" if usuario["activo"] else "No"
             usuario_rfid = usuario["usuario_rfid"] or ""
             tag = "par" if indice % 2 == 0 else "impar"
 
