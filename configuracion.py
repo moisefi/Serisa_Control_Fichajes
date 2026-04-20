@@ -30,7 +30,11 @@ class ConfiguracionAplicacion:
         return cls(**base)
 
     def a_dict(self) -> dict:
-        return asdict(self)
+        # Nunca persistimos credenciales en disco.
+        datos = asdict(self)
+        datos.pop("usuario_bd", None)
+        datos.pop("contrasena_bd", None)
+        return datos
 
 
 class RepositorioConfiguracion:

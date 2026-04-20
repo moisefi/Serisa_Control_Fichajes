@@ -85,6 +85,7 @@ class VentanaPrincipal(tk.Tk):
         self.fecha_hasta_filtro = None
         self.id_after_refresco = None
         self.editor_tabla_activo = None
+        self.token_carga_tabla = 0
 
         self.marco_acciones_conexion: ttk.Frame | None = None
         self.tabla_registros: ttk.Treeview | None = None
@@ -103,6 +104,8 @@ class VentanaPrincipal(tk.Tk):
         self.icono_refrescar = None
         self.icono_ventana = None
         self.icono_calendario = None
+        self.apertura_admin_en_progreso = False
+        self.dialogo_espera_admin: tk.Toplevel | None = None
 
     def _configurar_ventana(self) -> None:
         self.title("SERISA · Gestión de fichajes")
@@ -729,19 +732,123 @@ class VentanaPrincipal(tk.Tk):
                 "Solo los usuarios administradores pueden acceder a esta zona.",
             )
             return
+        if self.apertura_admin_en_progreso:
+            return
 
-        try:
-            ventana = VentanaAdministracion(
-                master=self,
-                servicio_autenticacion=self.servicio_autenticacion,
-                servicio_fichajes=self.servicio_fichajes,
-                logger=self.logger,
-                sesion=self.sesion,
+        # Evita comprobaciones de red bloqueantes en el hilo de UI.
+        if not self.servicio_fichajes.repositorio.esta_conectado():
+            self.estado_conexion.set("Desconectado")
+            self.ip_base_datos.set("Sin conexión con la Raspberry / base de datos")
+            self._actualizar_estado_visual()
+            messagebox.showwarning(
+                "Sin conexión",
+                "No se puede abrir Administración porque no hay conexión con la base de datos.",
             )
-            ventana.grab_set()
-        except Exception as error:
-            self.logger.exception("No se pudo abrir la ventana de administración")
-            messagebox.showerror("Error", str(error))
+            return
+
+        self.apertura_admin_en_progreso = True
+        self._mostrar_dialogo_espera_admin()
+
+        resultado = {"ok": False, "error": None}
+
+        def validar_conexion_admin() -> None:
+            try:
+                # Valida acceso real a BD en segundo plano para evitar congelar la UI.
+                self.servicio_autenticacion.listar_usuarios()
+                resultado["ok"] = True
+            except Exception as error:
+                resultado["error"] = error
+
+        hilo = threading.Thread(target=validar_conexion_admin, daemon=True)
+        hilo.start()
+
+        def finalizar_apertura() -> None:
+            if hilo.is_alive():
+                self.after(100, finalizar_apertura)
+                return
+
+            self.apertura_admin_en_progreso = False
+            self._cerrar_dialogo_espera_admin()
+
+            if not resultado["ok"]:
+                if isinstance(resultado["error"], ErrorConexionBaseDeDatos):
+                    self._manejar_desconexion()
+                    messagebox.showwarning(
+                        "Sin conexión",
+                        "No se pudo abrir Administración porque se perdió la conexión con la base de datos.",
+                    )
+                    return
+                self.logger.exception("No se pudo validar la apertura de Administración")
+                messagebox.showerror("Error", str(resultado["error"]))
+                return
+
+            try:
+                ventana = VentanaAdministracion(
+                    master=self,
+                    servicio_autenticacion=self.servicio_autenticacion,
+                    servicio_fichajes=self.servicio_fichajes,
+                    logger=self.logger,
+                    sesion=self.sesion,
+                )
+                ventana.grab_set()
+            except ErrorConexionBaseDeDatos:
+                self._manejar_desconexion()
+                messagebox.showwarning(
+                    "Sin conexión",
+                    "Se perdió la conexión al abrir Administración. Reintenta cuando se recupere.",
+                )
+            except Exception as error:
+                self.logger.exception("No se pudo abrir la ventana de administración")
+                messagebox.showerror("Error", str(error))
+
+        self.after(100, finalizar_apertura)
+
+    def _mostrar_dialogo_espera_admin(self) -> None:
+        if self.dialogo_espera_admin is not None and self.dialogo_espera_admin.winfo_exists():
+            self.dialogo_espera_admin.lift()
+            return
+
+        dialogo = tk.Toplevel(self)
+        dialogo.title("Administración")
+        dialogo.resizable(False, False)
+        dialogo.transient(self)
+        dialogo.grab_set()
+        dialogo.configure(bg=self.colores["fondo"])
+
+        frame = ttk.Frame(dialogo, padding=18)
+        frame.pack(fill="both", expand=True)
+
+        ttk.Label(
+            frame,
+            text="Comprobando conexión para abrir Administración...",
+            style="HeroSub.TLabel",
+            wraplength=320,
+            justify="center",
+        ).pack(anchor="center", pady=(0, 10))
+
+        barra = ttk.Progressbar(frame, mode="indeterminate", length=240)
+        barra.pack(anchor="center")
+        barra.start(10)
+
+        dialogo.update_idletasks()
+        ancho = dialogo.winfo_width()
+        alto = dialogo.winfo_height()
+        x = self.winfo_rootx() + (self.winfo_width() // 2) - (ancho // 2)
+        y = self.winfo_rooty() + (self.winfo_height() // 2) - (alto // 2)
+        dialogo.geometry(f"{ancho}x{alto}+{x}+{y}")
+
+        self.dialogo_espera_admin = dialogo
+
+    def _cerrar_dialogo_espera_admin(self) -> None:
+        if self.dialogo_espera_admin is None:
+            return
+        try:
+            if self.dialogo_espera_admin.winfo_exists():
+                self.dialogo_espera_admin.destroy()
+        except Exception:
+            pass
+        finally:
+            self.dialogo_espera_admin = None
 
     # =========================
     # DATOS / UI
@@ -1159,15 +1266,82 @@ class VentanaPrincipal(tk.Tk):
             return
 
         self._set_estado_tabla("Cargando registros...")
+        self.token_carga_tabla += 1
+        token_actual = self.token_carga_tabla
+        snapshot = self._crear_snapshot_filtros()
+        threading.Thread(
+            target=self._cargar_tabla_en_segundo_plano,
+            args=(token_actual, snapshot),
+            daemon=True,
+        ).start()
+
+    def _crear_snapshot_filtros(self) -> dict:
+        usuario_filtro = self.var_filtro_usuario.get().strip() or None
+
+        if self._es_basic():
+            usuario_rfid = None
+            if self.sesion is not None:
+                usuario_rfid = (getattr(self.sesion, "usuario_rfid", None) or "").strip()
+
+            if not usuario_rfid:
+                self.logger.warning("Usuario basic sin usuario_rfid asociado")
+                usuario_filtro = "__sin_usuario_rfid__"
+            else:
+                usuario_filtro = usuario_rfid
+
+        return {
+            "usuario": usuario_filtro,
+            "uid_tarjeta": self.var_filtro_uid.get().strip() or None,
+            "fecha_desde": self.fecha_desde_filtro,
+            "fecha_hasta": self.fecha_hasta_filtro,
+            "tipo": self.var_filtro_tipo.get().strip() or None,
+            "limite": 200,
+        }
+
+    def _obtener_datos_pantalla_desde_snapshot(self, snapshot: dict) -> tuple[list[tuple], dict]:
+        if snapshot.get("usuario") == "__sin_usuario_rfid__":
+            return [], {"uids_sin_asignar": [], "usuarios_asignados": [], "tipos": []}
+
+        filtros = FiltrosRegistros(
+            usuario=snapshot.get("usuario"),
+            uid_tarjeta=snapshot.get("uid_tarjeta"),
+            fecha_desde=snapshot.get("fecha_desde"),
+            fecha_hasta=snapshot.get("fecha_hasta"),
+            tipo=snapshot.get("tipo"),
+            limite=snapshot.get("limite", 200),
+        )
+        with self.lock_bd:
+            filas = self.servicio_fichajes.obtener_registros(filtros)
+            datos = self.servicio_fichajes.obtener_datos_desplegables()
+        return filas, datos
+
+    def _cargar_tabla_en_segundo_plano(self, token: int, snapshot: dict) -> None:
         try:
-            filas, datos = self._obtener_datos_pantalla()
-            self._actualizar_interfaz_con_datos(filas, datos)
+            filas, datos = self._obtener_datos_pantalla_desde_snapshot(snapshot)
+
+            def aplicar() -> None:
+                if token != self.token_carga_tabla:
+                    return
+                self._actualizar_interfaz_con_datos(filas, datos)
+
+            self.after(0, aplicar)
         except ErrorConexionBaseDeDatos:
-            self._set_estado_tabla("Sin conexión")
-            self._manejar_desconexion()
+            def aplicar_error_conexion() -> None:
+                if token != self.token_carga_tabla:
+                    return
+                self._set_estado_tabla("Sin conexión")
+                self._manejar_desconexion()
+
+            self.after(0, aplicar_error_conexion)
         except Exception:
-            self._set_estado_tabla("Error al cargar")
             self.logger.exception("Error al actualizar la tabla de registros")
+
+            def aplicar_error_generico() -> None:
+                if token != self.token_carga_tabla:
+                    return
+                self._set_estado_tabla("Error al cargar")
+
+            self.after(0, aplicar_error_generico)
 
     def _programar_actualizacion_periodica(self) -> None:
         if self.id_after_refresco is not None:
