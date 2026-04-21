@@ -249,3 +249,4 @@ EXECUTE FUNCTION public.asignacion_insert();
 CREATE TRIGGER trigger_delete_asignacion
 AFTER DELETE ON public.usuarios
 FOR EACH ROW
+EXECUTE FUNCTION public.asignacion_delete();
