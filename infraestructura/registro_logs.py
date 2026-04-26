@@ -5,8 +5,9 @@ import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from rutas import obtener_directorio_logs
 
-RUTA_BASE_LOGS = Path("logs")
+RUTA_BASE_LOGS = obtener_directorio_logs()
 NOMBRE_LOG = "aplicacion.log"
 DIAS_A_CONSERVAR = 7
 NOMBRE_LOGGER = "aplicacion_fichajes"

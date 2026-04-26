@@ -6,6 +6,7 @@ import tkinter as tk
 from dataclasses import dataclass
 from tkinter import font, messagebox, ttk
 from errores import ErrorConexionBaseDeDatos
+from rutas import obtener_directorio_base, obtener_recurso
 
 @dataclass(slots=True)
 class SesionUsuario:
@@ -26,7 +27,7 @@ class VentanaLogin(tk.Tk):
         self.sesion: SesionUsuario | None = None
         self.conexion_ok = False
         self.icono_ventana = None
-        self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.base_dir = str(obtener_directorio_base())
 
         self.title("Inicio de sesión")
         self.geometry("640x560")
@@ -128,7 +129,7 @@ class VentanaLogin(tk.Tk):
 
     def _configurar_icono_ventana(self) -> None:
         try:
-            ruta_logo = os.path.join(self.base_dir, "imagenes", "logo_serisa.png")
+            ruta_logo = str(obtener_recurso("imagenes", "logo_serisa.png"))
             if os.path.exists(ruta_logo):
                 self.icono_ventana = tk.PhotoImage(file=ruta_logo)
                 self.iconphoto(True, self.icono_ventana)

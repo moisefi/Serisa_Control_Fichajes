@@ -7,6 +7,7 @@ from tkinter import font as tkfont
 from tkinter import messagebox, ttk
 
 from PIL import Image, ImageTk
+from rutas import obtener_directorio_base, obtener_recurso
 from tkcalendar import DateEntry
 
 
@@ -24,7 +25,7 @@ class VentanaAdministracion(tk.Toplevel):
         if getattr(self.sesion, "rol", "").lower() != "admin":
             raise PermissionError("Solo un administrador puede abrir esta ventana")
 
-        self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.base_dir = str(obtener_directorio_base())
         self.icono_ventana = None
         self.icono_calendario = None
 
@@ -254,7 +255,7 @@ class VentanaAdministracion(tk.Toplevel):
     # =========================
     def _configurar_icono_ventana(self) -> None:
         try:
-            ruta_logo = os.path.join(self.base_dir, "imagenes", "logo_serisa.png")
+            ruta_logo = str(obtener_recurso("imagenes", "logo_serisa.png"))
             if os.path.exists(ruta_logo):
                 self.icono_ventana = tk.PhotoImage(file=ruta_logo)
                 self.iconphoto(True, self.icono_ventana)
@@ -523,7 +524,7 @@ class VentanaAdministracion(tk.Toplevel):
         self._crear_boton_calendario(fila_intervalo)
 
     def _crear_boton_calendario(self, contenedor: ttk.Frame) -> None:
-        ruta_icono_calendario = os.path.join(self.base_dir, "imagenes", "calendario.png")
+        ruta_icono_calendario = str(obtener_recurso("imagenes", "calendario.png"))
 
         try:
             imagen = Image.open(ruta_icono_calendario)

@@ -14,6 +14,7 @@ from tkcalendar import DateEntry
 from configuracion import ConfiguracionAplicacion
 from errores import ErrorConexionBaseDeDatos
 from interfaz.ventana_administracion import VentanaAdministracion
+from rutas import obtener_directorio_base, obtener_recurso
 from interfaz.ventana_exportacion import VentanaExportacion
 from servicios.servicio_conexion import ServicioConexion
 from servicios.servicio_fichajes import FiltrosRegistros, ServicioFichajes
@@ -37,7 +38,7 @@ class VentanaPrincipal(tk.Tk):
         self.logger = logger
         self.sesion = sesion
 
-        self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.base_dir = str(obtener_directorio_base())
         self.lock_bd = threading.Lock()
         self.resultado_cierre = "salir"
 
@@ -147,7 +148,7 @@ class VentanaPrincipal(tk.Tk):
     # =========================
     def _configurar_icono_ventana(self) -> None:
         try:
-            ruta_logo = os.path.join(self.base_dir, "imagenes", "logo_serisa.png")
+            ruta_logo = str(obtener_recurso("imagenes", "logo_serisa.png"))
             if os.path.exists(ruta_logo):
                 self.icono_ventana = tk.PhotoImage(file=ruta_logo)
                 self.iconphoto(True, self.icono_ventana)
@@ -587,7 +588,7 @@ class VentanaPrincipal(tk.Tk):
         self._crear_boton_refresco_intervalo(fila_intervalo)
 
     def _crear_boton_calendario(self, contenedor: ttk.Frame) -> None:
-        ruta_icono_calendario = os.path.join(self.base_dir, "imagenes", "calendario.png")
+        ruta_icono_calendario = str(obtener_recurso("imagenes", "calendario.png"))
 
         try:
             imagen = Image.open(ruta_icono_calendario)
@@ -620,7 +621,7 @@ class VentanaPrincipal(tk.Tk):
         self.etiqueta_resumen_fechas = ttk.Label(fila_fecha, text="Sin intervalo", style="Card.TLabel")
         self.etiqueta_resumen_fechas.pack(side="left", fill="x", expand=True)
 
-        ruta_icono_calendario = os.path.join(self.base_dir, "imagenes", "calendario.png")
+        ruta_icono_calendario = str(obtener_recurso("imagenes", "calendario.png"))
 
         try:
             imagen = Image.open(ruta_icono_calendario)
@@ -669,7 +670,7 @@ class VentanaPrincipal(tk.Tk):
         ).pack(side="left")
 
     def _crear_boton_refresco_intervalo(self, contenedor: ttk.Frame) -> None:
-        ruta_icono_refrescar = os.path.join(self.base_dir, "imagenes", "refresh.png")
+        ruta_icono_refrescar = str(obtener_recurso("imagenes", "refresh.png"))
         try:
             imagen = Image.open(ruta_icono_refrescar)
             imagen = imagen.resize((20, 20))
