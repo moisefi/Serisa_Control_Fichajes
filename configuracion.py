@@ -44,7 +44,7 @@ class RepositorioConfiguracion:
 
     def cargar(self) -> ConfiguracionAplicacion:
         if not self.ruta.exists():
-            configuracion = ConfiguracionAplicacion()
+            configuracion = self._crear_configuracion_por_defecto()
             self.guardar(configuracion)
             return configuracion
 
@@ -57,7 +57,7 @@ class RepositorioConfiguracion:
                 self.guardar(configuracion)
             return configuracion
         except Exception as error:
-            configuracion = ConfiguracionAplicacion()
+            configuracion = self._crear_configuracion_por_defecto()
             self.guardar(configuracion)
             raise ErrorConfiguracion(
                 "El archivo de configuración estaba dañado. Se ha restaurado la configuración por defecto."
@@ -73,3 +73,7 @@ class RepositorioConfiguracion:
         # Compatibilidad con instalaciones antiguas que guardaban "postgres"
         # como base de datos por defecto.
         return (configuracion.nombre_bd or "").strip().lower() == "postgres"
+
+    @staticmethod
+    def _crear_configuracion_por_defecto() -> ConfiguracionAplicacion:
+        return ConfiguracionAplicacion.desde_dict({})

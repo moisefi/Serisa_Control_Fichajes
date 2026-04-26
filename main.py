@@ -8,6 +8,7 @@ from infraestructura.repositorio_autenticacion import RepositorioAutenticacion
 from infraestructura.repositorio_fichajes import RepositorioFichajes
 from interfaz.ventana_login import VentanaLogin
 from interfaz.ventana_principal import VentanaPrincipal
+from rutas import obtener_recurso
 from servicios.servicio_autenticacion import ServicioAutenticacion
 from servicios.servicio_conexion import ServicioConexion
 from servicios.servicio_fichajes import ServicioFichajes
@@ -17,7 +18,7 @@ if __name__ == "__main__":
     logger = configurar_logger()
     logger.info("Inicio de la aplicación")
 
-    load_dotenv()
+    load_dotenv(dotenv_path=obtener_recurso(".env"))
     repositorio_configuracion = RepositorioConfiguracion()
     try:
         configuracion = repositorio_configuracion.cargar()
