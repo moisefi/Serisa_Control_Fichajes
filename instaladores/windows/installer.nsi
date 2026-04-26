@@ -4,15 +4,16 @@ Unicode True
 !include "FileFunc.nsh"
 !include "x64.nsh"
 
+!define PROJECT_ROOT "..\.."
 !define APP_NAME "SERISA"
 !define APP_VERSION "1.0.0"
 !define APP_PUBLISHER "SERISA"
 !define APP_EXE "SERISA.exe"
-!define APP_ICON "imagenes\logo_serisa.ico"
+!define APP_ICON "${PROJECT_ROOT}\imagenes\logo_serisa.ico"
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
 
 Name "${APP_NAME}"
-OutFile "dist\installer\SERISA-Setup.exe"
+OutFile "${PROJECT_ROOT}\dist\installer\SERISA-Setup.exe"
 
 InstallDir "$LOCALAPPDATA\Programs\${APP_NAME}"
 InstallDirRegKey HKCU "${UNINSTALL_KEY}" "InstallLocation"
@@ -46,7 +47,7 @@ Section "Aplicacion" SecApp
     ExecWait '"$INSTDIR\Uninstall.exe" /S _?=$INSTDIR'
     RMDir /r "$INSTDIR"
 
-    File /r "dist\SERISA\*"
+    File /r "${PROJECT_ROOT}\dist\SERISA\*"
     WriteUninstaller "$INSTDIR\Uninstall.exe"
 
     CreateDirectory "$SMPROGRAMS\${APP_NAME}"
