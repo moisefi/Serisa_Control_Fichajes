@@ -1,85 +1,102 @@
 # SERISA Control de Fichajes
 
-Aplicacion de escritorio en Python para gestionar fichajes RFID con interfaz grafica, autenticacion por roles y conexion a una base de datos PostgreSQL alojada en red.
+Aplicacion de escritorio en Python para la gestion de fichajes RFID, con autenticacion por roles, conexion a PostgreSQL en red y un modulo auxiliar para Raspberry Pi que registra lecturas de tarjetas.
 
 ## Descripcion
 
-El proyecto centraliza el registro y consulta de fichajes de personal. La aplicacion de escritorio permite:
+El repositorio contiene un sistema completo de control horario compuesto por:
 
-- iniciar sesion con usuarios de la aplicacion;
-- conectarse automaticamente o manualmente al servidor PostgreSQL;
-- consultar y filtrar registros de fichaje;
-- asignar tarjetas RFID a usuarios internos;
-- editar registros de entrada y salida;
-- exportar informes a Excel y PDF;
-- administrar usuarios y permisos desde una ventana exclusiva para administradores.
+- una aplicacion de escritorio Tkinter para consulta y administracion de fichajes;
+- una base de datos PostgreSQL con tablas, funciones y triggers;
+- un servicio auxiliar para Raspberry Pi que escucha un lector RFID USB;
+- scripts de empaquetado para generar ejecutables e instaladores.
 
-El repositorio incluye ademas un modulo independiente para Raspberry Pi que lee tarjetas RFID por USB y registra sus UIDs en la base de datos.
+La aplicacion principal permite trabajar con distintos perfiles de usuario y centraliza la operativa diaria de consulta, alta, edicion y exportacion de registros.
 
 ## Funcionalidades principales
 
-- Login con reconexion a base de datos desde la propia interfaz.
+- Inicio de sesion con usuarios de la aplicacion.
 - Roles `admin`, `rrhh` y `basic`.
-- Refresco periodico de registros.
+- Conexion automatica por hostname o manual por IP al servidor PostgreSQL.
+- Refresco periodico de fichajes y estado de conexion.
 - Filtros por usuario, UID, tipo y rango de fechas.
 - Alta y baja de usuarios RFID.
-- Edicion de fecha/hora y tipo de registro desde la tabla.
-- Exportacion de informes en `Excel` y `PDF`.
-- Ventana de administracion de usuarios de acceso.
-- Sistema de logs diario para la aplicacion principal.
-- Servicio auxiliar para lectura RFID en Raspberry Pi.
+- Edicion de fecha/hora y tipo de fichaje desde la tabla principal.
+- Exportacion de informes a Excel y PDF.
+- Gestion de usuarios de acceso desde una ventana de administracion.
+- Logs de aplicacion por fecha.
+- Servicio RFID independiente para Raspberry Pi / Linux.
 
-## Roles de usuario
+## Roles
 
-- `admin`: acceso completo, incluida la ventana de administracion de usuarios.
+- `admin`: acceso completo, incluida la administracion de usuarios de acceso.
 - `rrhh`: gestion de fichajes, usuarios RFID, conexion y exportaciones.
-- `basic`: consulta restringida de sus registros asociados.
+- `basic`: consulta restringida a los registros asociados a su usuario RFID.
 
-Los usuarios `basic` deben tener asociado un `usuario_rfid`.
+Los usuarios `basic` deben estar vinculados a un `usuario_rfid`.
 
-## Estructura del proyecto
+## Estructura del repositorio
 
 ```text
 APP_Proyecto/
-|-- main.py
-|-- crear_admin.py
-|-- configuracion.py
-|-- config.json
-|-- requirements.txt
-|-- servicios/
-|   |-- servicio_autenticacion.py
-|   |-- servicio_conexion.py
-|   |-- servicio_exportacion.py
-|   `-- servicio_fichajes.py
+|-- Base_datos/
+|   `-- create_database.sql
+|-- imagenes/
 |-- infraestructura/
 |   |-- escaner_red.py
 |   |-- registro_logs.py
 |   |-- repositorio_autenticacion.py
 |   `-- repositorio_fichajes.py
+|-- instaladores/
+|   |-- linux/
+|   |-- macos/
+|   `-- windows/
 |-- interfaz/
-|   |-- ventana_login.py
-|   |-- ventana_principal.py
+|   |-- ventana_administracion.py
 |   |-- ventana_exportacion.py
-|   `-- ventana_administracion.py
-|-- imagenes/
-|-- logs/
-`-- RPI_Code/
-    |-- lector_rfid_usb.py
-    `-- requirements.txt
+|   |-- ventana_login.py
+|   `-- ventana_principal.py
+|-- pytest/
+|   |-- conftest.py
+|   |-- test_configuracion.py
+|   |-- test_interfaz_login.py
+|   |-- test_interfaz_principal_admin.py
+|   |-- test_repositorio_autenticacion.py
+|   |-- test_repositorio_fichajes.py
+|   |-- test_servicio_autenticacion.py
+|   |-- test_servicio_conexion.py
+|   |-- test_servicio_exportacion.py
+|   `-- test_servicio_fichajes.py
+|-- RPI_Code/
+|   |-- lector_rfid_usb.py
+|   `-- requirements.txt
+|-- servicios/
+|   |-- servicio_autenticacion.py
+|   |-- servicio_conexion.py
+|   |-- servicio_exportacion.py
+|   `-- servicio_fichajes.py
+|-- configuracion.py
+|-- crear_admin.py
+|-- main.py
+|-- requirements.txt
+|-- rutas.py
+`-- config.json
 ```
 
 ## Requisitos
+
+### Aplicacion principal
 
 - Python 3.12
 - PostgreSQL accesible por red
 - `pip`
 
-Para el modulo `RPI_Code`:
+### Modulo Raspberry Pi
 
-- Raspberry Pi o Linux con lector RFID USB
+- Raspberry Pi o Linux con lector RFID USB compatible
 - acceso a dispositivos `evdev`
 
-## Instalacion
+## Instalacion en desarrollo
 
 ### 1. Crear entorno virtual
 
@@ -87,7 +104,7 @@ Para el modulo `RPI_Code`:
 python -m venv .venv
 ```
 
-### 2. Activar entorno
+### 2. Activar el entorno
 
 En Windows:
 
@@ -109,28 +126,46 @@ pip install -r requirements.txt
 
 ## Configuracion
 
-La aplicacion usa `config.json` y variables de entorno.
+La aplicacion combina configuracion persistente en disco y variables de entorno.
 
 ### `config.json`
 
-Parametros principales:
+Incluye parametros funcionales de la aplicacion:
 
 - `ip_bd`: IP conocida del servidor PostgreSQL.
-- `hostname_raspberry`: hostname que la aplicacion intentara resolver en red.
+- `hostname_raspberry`: hostname a resolver en la red.
 - `puerto_bd`: puerto de PostgreSQL.
-- `usuario_bd`: usuario de base de datos.
-- `contrasena_bd`: contrasena de base de datos.
 - `nombre_bd`: nombre de la base de datos.
-- `intervalo_refresco_ms`: frecuencia de actualizacion de la interfaz.
+- `intervalo_refresco_ms`: frecuencia de refresco de la interfaz.
+
+En el codigo actual, el fichero de configuracion persistente se guarda en el perfil del usuario:
+
+- Windows: `%APPDATA%\SERISA\config.json`
+- fallback multiplataforma: `~/.serisa/config.json`
+
+Las credenciales no se persisten en ese archivo.
 
 ### `.env`
 
-La aplicacion principal puede sobreescribir el usuario y la contrasena de base de datos con:
+La aplicacion principal lee estas variables:
 
 ```env
 DB_USER=tu_usuario_postgres
 DB_PASSWORD=tu_password_postgres
 ```
+
+Actualmente el empaquetado de Windows incluye el `.env` dentro de la aplicacion distribuida, por lo que esas credenciales forman parte del build si el archivo existe en el momento de empaquetar.
+
+## Base de datos
+
+El script [Base_datos/create_database.sql](Base_datos/create_database.sql) recrea la base `fichajes` e incluye:
+
+- tablas `registros`, `usuarios`, `auth_usuarios` y `asignaciones_tarjetas`;
+- indices para consultas por UID, fecha y username;
+- triggers para alternancia automatica de `entrada` / `salida`;
+- cierre de asignaciones activas al borrar usuarios;
+- creacion automatica de asignaciones al registrar usuarios RFID;
+- funcion para cerrar registros pendientes de salida en una fecha.
 
 ## Ejecucion
 
@@ -146,18 +181,18 @@ Crear el usuario administrador inicial:
 python crear_admin.py
 ```
 
-El script crea, si no existe, este acceso por defecto:
+Si no existe un administrador previo, el script crea este acceso:
 
 - usuario: `admin`
 - contrasena: `admin`
 
-Conviene cambiar esa contrasena despues del primer acceso.
+Conviene cambiar esa contrasena en cuanto se valide el primer acceso.
 
 ## Modulo Raspberry Pi
 
-La carpeta `RPI_Code/` contiene un servicio que detecta automaticamente un lector RFID USB compatible, escucha eventos de teclado y registra los UIDs en la tabla de registros.
+La carpeta `RPI_Code/` contiene un servicio que detecta automaticamente un lector RFID USB compatible, escucha los eventos del dispositivo y registra los UIDs en la base de datos.
 
-Instalacion basica:
+Instalacion minima:
 
 ```bash
 cd RPI_Code
@@ -165,7 +200,7 @@ pip install -r requirements.txt
 python lector_rfid_usb.py
 ```
 
-Variables de entorno esperadas por ese modulo:
+Variables esperadas por ese modulo:
 
 ```env
 BD_USUARIO=tu_usuario_postgres
@@ -175,38 +210,52 @@ BD_HOST=ip_o_hostname
 BD_PUERTO=5432
 ```
 
-## Base funcional del sistema
+## Tests
 
-Segun el codigo actual, la aplicacion trabaja sobre entidades equivalentes a:
+El repositorio incluye pruebas unitarias y de integracion ligera sobre configuracion, servicios, repositorios, logging e interfaz.
 
-- usuarios con nombre y tarjeta RFID;
-- registros de fichaje con UID, fecha/hora y tipo;
-- usuarios de acceso a la aplicacion con rol, password cifrada y enlace opcional a usuario RFID.
+Ejecucion:
+
+```bash
+pytest
+```
+
+## Empaquetado e instaladores
+
+El proyecto ya incluye configuracion de empaquetado:
+
+- `instaladores/windows/SERISA.spec` para PyInstaller en Windows.
+- `instaladores/windows/` para ejecutable e instalador NSIS en Windows.
+- `instaladores/linux/` para build Linux y empaquetado `tar.gz` / opcional `.deb`.
+- `instaladores/macos/` para app macOS y empaquetado `zip` / opcional `.dmg`.
+
+Cada subcarpeta de `instaladores/` contiene su propio `README.md` con los pasos concretos.
+
+En Windows, el script principal es:
+
+```powershell
+.\instaladores\windows\build_windows.ps1
+```
 
 ## Arquitectura
 
-El proyecto esta organizado por capas:
+El proyecto sigue una separacion por capas:
 
 - `interfaz/`: ventanas Tkinter y flujo de usuario.
-- `servicios/`: reglas de negocio, autenticacion, exportacion y conexion.
-- `infraestructura/`: acceso a PostgreSQL, red y logging.
-
-Esta separacion facilita extender la interfaz o sustituir componentes de acceso a datos sin mezclar responsabilidades.
+- `servicios/`: logica de negocio y casos de uso.
+- `infraestructura/`: acceso a datos, red y logging.
+- `Base_datos/`: esquema SQL, funciones y triggers.
+- `RPI_Code/`: captura de eventos RFID en hardware externo.
 
 ## Dependencias principales
 
 - `psycopg2` para PostgreSQL.
-- `bcrypt` para hashing de contrasenas.
+- `bcrypt` para hash de contrasenas.
 - `pandas` y `openpyxl` para exportacion a Excel.
-- `reportlab` para generacion de PDF.
-- `Pillow` y `tkcalendar` para la interfaz.
-- `python-dotenv` para configuracion por entorno.
-
-## Logs
-
-La aplicacion principal genera logs rotados por fecha en `logs/`.
-
-El modulo Raspberry mantiene sus propios logs en la ruta configurada dentro de `RPI_Code/lector_rfid_usb.py`.
+- `reportlab` para PDF.
+- `Pillow` y `tkcalendar` para recursos e interfaz.
+- `python-dotenv` para variables de entorno.
+- `pytest` para pruebas.
 
 ## Autor
 
