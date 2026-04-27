@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import os
 import socket
 import tkinter as tk
@@ -337,6 +338,11 @@ class VentanaLogin(tk.Tk):
         ip = self.var_ip_manual.get().strip()
         if not ip:
             messagebox.showwarning("Dato obligatorio", "Introduce una IP.")
+            return
+        try:
+            ipaddress.ip_address(ip)
+        except ValueError:
+            messagebox.showerror("IP inválida", "Introduce una dirección IP válida (ej: 192.168.1.10)")
             return
 
         self.var_estado_conexion.set(f"Conectando con {ip}...")

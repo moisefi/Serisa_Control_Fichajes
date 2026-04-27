@@ -24,6 +24,7 @@ class ServicioConexionFake:
         self.configuracion = SimpleNamespace(hostname_raspberry="rpi-fichajes", ip_bd="192.168.1.20")
         self.activa = True
         self.desconectado = False
+        self.ip_conectada = None
 
     def verificar_conexion_activa(self):
         return self.activa
@@ -31,7 +32,8 @@ class ServicioConexionFake:
     def desconectar(self):
         self.desconectado = True
 
-    def conectar_a_ip(self, _ip):
+    def conectar_a_ip(self, ip):
+        self.ip_conectada = ip
         return
 
     def buscar_ip(self):
@@ -132,3 +134,19 @@ def test_login_ok_crea_sesion(monkeypatch):
             login.destroy()
         except Exception:
             pass
+
+
+def test_conectar_por_ip_manual_rechaza_ip_invalida(monkeypatch):
+    errores = []
+    servicio_conexion = ServicioConexionFake()
+    monkeypatch.setattr("interfaz.ventana_login.messagebox.showerror", lambda *args, **kwargs: errores.append(args))
+    login = _build_login(monkeypatch, servicio_conexion=servicio_conexion)
+    try:
+        login.var_ip_manual.set("999.999.999.999")
+        login._conectar_por_ip_manual()
+
+        assert errores
+        assert errores[0][0] == "IP inválida"
+        assert servicio_conexion.ip_conectada is None
+    finally:
+        login.destroy()
