@@ -101,7 +101,6 @@ class VentanaPrincipal(tk.Tk):
         self.boton_buscar: ttk.Button | None = None
         self.boton_ip_manual: ttk.Button | None = None
 
-        self.logo_principal = None
         self.icono_refrescar = None
         self.icono_ventana = None
         self.icono_calendario = None
@@ -610,40 +609,6 @@ class VentanaPrincipal(tk.Tk):
                 style="Secondary.TButton",
             ).grid(row=0, column=2, sticky="e", padx=(0, 0))
 
-
-    def _crear_bloque_filtro_fecha(self, contenedor: ttk.Frame) -> None:
-        bloque_fecha = ttk.Frame(contenedor)
-        bloque_fecha.grid(row=0, column=2, sticky="ew", padx=(0, 10), pady=(0, 10))
-        ttk.Label(bloque_fecha, text="Intervalo", style="Muted.TLabel").pack(anchor="w")
-        fila_fecha = ttk.Frame(bloque_fecha)
-        fila_fecha.pack(fill="x", pady=(4, 0))
-
-        self.etiqueta_resumen_fechas = ttk.Label(fila_fecha, text="Sin intervalo", style="Card.TLabel")
-        self.etiqueta_resumen_fechas.pack(side="left", fill="x", expand=True)
-
-        ruta_icono_calendario = str(obtener_recurso("imagenes", "calendario.png"))
-
-        try:
-            imagen = Image.open(ruta_icono_calendario)
-            imagen = imagen.resize((18, 18))  # ajusta si quieres más grande
-            self.icono_calendario = ImageTk.PhotoImage(imagen)
-
-            ttk.Button(
-                fila_fecha,
-                image=self.icono_calendario,
-                command=self.abrir_selector_intervalo_fechas,
-                style="Secondary.TButton",
-            ).pack(side="right", padx=(8, 0))
-
-        except Exception:
-            # fallback por si falla la imagen
-            ttk.Button(
-                fila_fecha,
-                text="Editar",
-                command=self.abrir_selector_intervalo_fechas,
-                style="Secondary.TButton",
-            ).pack(side="right", padx=(8, 0))
-
     def _crear_bloque_filtro_tipo(self, contenedor: ttk.Frame) -> None:
         bloque_tipo = ttk.Frame(contenedor)
         bloque_tipo.grid(row=0, column=2, sticky="ew", padx=(0, 10), pady=(0, 10))
@@ -854,74 +819,6 @@ class VentanaPrincipal(tk.Tk):
     # =========================
     # DATOS / UI
     # =========================
-    def _limpiar_estado_desconectado(self) -> None:
-        self.resumen_registros.set("0")
-        self.resumen_usuarios.set("0")
-        self.resumen_tarjetas.set("0")
-        self.resumen_actualizacion.set("Sin sincronizar")
-        self.estado_tabla.set("Sin conexión")
-
-        self.var_nombre_usuario.set("")
-        self.var_uid_tarjeta.set("")
-        self.var_uid_baja.set("")
-        self.var_filtro_usuario.set("")
-        self.var_filtro_uid.set("")
-        self.var_filtro_tipo.set("")
-        self.fecha_desde_filtro = None
-        self.fecha_hasta_filtro = None
-        if self.etiqueta_resumen_fechas is not None:
-            self.etiqueta_resumen_fechas.configure(text="Sin intervalo")
-
-        self.lista_usuarios = []
-        self.lista_uid = []
-        self.mapa_baja_usuario = {}
-
-        if self.tabla_registros is not None:
-            for elemento in self.tabla_registros.get_children():
-                self.tabla_registros.delete(elemento)
-
-        for combo in (self.combo_uid_alta, self.combo_uid_baja, self.combo_filtro_usuario, self.combo_filtro_uid, self.combo_filtro_tipo):
-            if combo is not None:
-                combo["values"] = ()
-
-    def _aplicar_datos_desplegables(self, datos_desplegables: dict) -> None:
-        uids_sin_asignar = datos_desplegables["uids_sin_asignar"]
-        usuarios_asignados = datos_desplegables["usuarios_asignados"]
-        tipos = datos_desplegables["tipos"]
-
-        if self.combo_uid_alta is not None:
-            self.combo_uid_alta["values"] = uids_sin_asignar
-            if self.var_uid_tarjeta.get() not in uids_sin_asignar:
-                self.var_uid_tarjeta.set("")
-
-        if self.combo_uid_baja is not None:
-            self.mapa_baja_usuario = {f"{nombre} ({uid})": uid for nombre, uid in usuarios_asignados}
-            opciones_baja = list(self.mapa_baja_usuario.keys())
-            self.combo_uid_baja["values"] = opciones_baja
-            if self.var_uid_baja.get() not in opciones_baja:
-                self.var_uid_baja.set("")
-
-        if self.combo_filtro_usuario is not None:
-            self.lista_usuarios = [""] + sorted(list({nombre for nombre, _uid in usuarios_asignados} | {"Sin asignar"}))
-            self.combo_filtro_usuario["values"] = self.lista_usuarios
-            if self.var_filtro_usuario.get() not in self.lista_usuarios:
-                self.var_filtro_usuario.set("")
-
-        if self.combo_filtro_uid is not None:
-            self.lista_uid = [""] + sorted(list({uid for _nombre, uid in usuarios_asignados} | set(uids_sin_asignar)))
-            self.combo_filtro_uid["values"] = self.lista_uid
-            if self.var_filtro_uid.get() not in self.lista_uid:
-                self.var_filtro_uid.set("")
-
-        if self.combo_filtro_tipo is not None:
-            opciones_tipo = [""] + sorted(list(set(tipos) | {"entrada", "salida"}))
-            self.combo_filtro_tipo["values"] = opciones_tipo
-            if self.var_filtro_tipo.get() not in opciones_tipo:
-                self.var_filtro_tipo.set("")
-
-        self.resumen_usuarios.set(str(len({nombre for nombre, _uid in usuarios_asignados})))
-        self.resumen_tarjetas.set(str(len(uids_sin_asignar)))
-
     def _actualizar_interfaz_con_datos(self, filas: list[tuple], datos_desplegables: dict) -> None:
         if self.tabla_registros is None:
             return
